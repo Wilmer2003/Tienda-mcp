@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "tienda-virtual": {
+      "command": "C:\\Users\\medin\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+      "args": ["-m", "server.mcp_server"],
+      "cwd": "C:\\Users\\medin\\Downloads\\Corpus\\tienda-mcp",
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}

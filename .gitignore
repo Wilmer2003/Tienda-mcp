@@ -1,0 +1,21 @@
+# Claves y credenciales - NUNCA subir al repo
+.env
+server/firebase-credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Uploads de vouchers
+web/uploads/
+
+# IDE
+.idea/
+.vscode/
+.claude/
+
+# Tests cache
+.pytest_cache/

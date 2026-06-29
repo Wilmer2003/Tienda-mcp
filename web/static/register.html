@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crear cuenta — AURA Boutique</title>
+  <link rel="stylesheet" href="/static/auth.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <!-- Panel izquierdo: branding -->
+    <aside class="brand-panel">
+      <div class="brand-content">
+        <div class="logo-row">
+          <span class="logo">A</span>
+          <span class="brand-text">
+            <strong>AURA</strong>
+            <small>Boutique</small>
+          </span>
+        </div>
+
+        <div>
+          <p class="brand-kicker">Únete a AURA</p>
+          <h2 class="brand-heading">
+            Crea tu cuenta.
+            <span class="accent">Empieza a comprar.</span>
+          </h2>
+          <p class="brand-copy">
+            Tu cuenta sincroniza tu carrito, pedidos y conversaciones con
+            los agentes en cualquier dispositivo donde inicies sesión.
+          </p>
+        </div>
+
+        <div class="brand-features">
+          <div class="brand-feature">
+            <span class="dot"></span>
+            <div>
+              <strong>Registro en un clic</strong>
+              <span>Continúa con Google y deja tu correo y nombre listos al instante.</span>
+            </div>
+          </div>
+          <div class="brand-feature">
+            <span class="dot"></span>
+            <div>
+              <strong>Sin spam</strong>
+              <span>Solo te escribimos para confirmar pedidos y enviar vouchers.</span>
+            </div>
+          </div>
+          <div class="brand-feature">
+            <span class="dot"></span>
+            <div>
+              <strong>Bienvenida con regalo</strong>
+              <span>Recibe recomendaciones de prendas de temporada al instante.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Panel derecho: formulario -->
+    <section class="form-panel">
+      <div class="auth-card">
+        <header class="auth-header">
+          <p class="kicker">Registro</p>
+          <h1>Crear cuenta</h1>
+          <p>Completa tus datos o continúa con Google para empezar a comprar.</p>
+        </header>
+
+        <div id="alert" class="alert" style="display:none">
+          <span class="icon">!</span>
+          <span id="alert-msg"></span>
+        </div>
+
+        <button id="google-btn" type="button" class="google-btn">
+          <svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+            <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          <span id="google-label">Continuar con Google</span>
+        </button>
+
+        <div class="divider"><span>o con tu correo</span></div>
+
+        <form id="register-form" novalidate>
+          <div class="grid-2">
+            <div class="field">
+              <label for="first-name">Nombre</label>
+              <input id="first-name" type="text" placeholder="Kathia" autocomplete="given-name" required />
+            </div>
+            <div class="field">
+              <label for="last-name">Apellido</label>
+              <input id="last-name" type="text" placeholder="Medina" autocomplete="family-name" required />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="email">Correo electrónico</label>
+            <input id="email" type="email" placeholder="tu@correo.com" autocomplete="email" required />
+          </div>
+
+          <div class="field">
+            <label for="password">Contraseña</label>
+            <input id="password" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" required />
+          </div>
+
+          <div class="field">
+            <label for="confirm">Confirmar contraseña</label>
+            <input id="confirm" type="password" placeholder="Repite tu contraseña" autocomplete="new-password" required />
+          </div>
+
+          <button type="submit" id="submit-btn" class="primary-btn">
+            <span id="submit-label">Crear cuenta</span>
+          </button>
+        </form>
+
+        <p class="auth-footer">
+          ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import {
+      auth,
+      googleProvider,
+      createUserWithEmailAndPassword,
+      signInWithPopup,
+      updateProfile,
+      onAuthStateChanged,
+      syncWithBackend,
+      mapFirebaseError,
+    } from "/static/firebase-config.js";
+
+    const $ = (id) => document.getElementById(id);
+    const alertBox = $("alert");
+    const alertMsg = $("alert-msg");
+    let redirecting = false;
+    let authActionInProgress = false;
+
+    function showError(msg) {
+      alertBox.classList.remove("success");
+      alertMsg.textContent = msg;
+      alertBox.style.display = "flex";
+    }
+    function clearError() {
+      alertBox.style.display = "none";
+      alertMsg.textContent = "";
+    }
+    function setLoading(loading, where) {
+      if (where === "submit") {
+        $("submit-btn").disabled = loading;
+        $("submit-label").innerHTML = loading
+          ? '<span class="spinner"></span> Creando cuenta...'
+          : "Crear cuenta";
+      } else if (where === "google") {
+        $("google-btn").disabled = loading;
+        $("google-label").textContent = loading
+          ? "Conectando..."
+          : "Continuar con Google";
+      }
+    }
+
+    async function postRegisterRedirect(user, displayName) {
+      if (redirecting) return;
+      redirecting = true;
+      try {
+        await syncWithBackend(user, displayName);
+        window.location.href = "/";
+      } catch (err) {
+        redirecting = false;
+        throw err;
+      }
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user || authActionInProgress) return;
+      try {
+        await postRegisterRedirect(user);
+      } catch (_) {
+        redirecting = false;
+      }
+    });
+
+    $("register-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+      const firstName = $("first-name").value.trim();
+      const lastName = $("last-name").value.trim();
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const confirm = $("confirm").value;
+      if (!firstName || !lastName) {
+        showError("Ingresa nombre y apellido.");
+        return;
+      }
+      if (!email) {
+        showError("Ingresa tu correo electrónico.");
+        return;
+      }
+      if (password.length < 6) {
+        showError("La contraseña debe tener al menos 6 caracteres.");
+        return;
+      }
+      if (password !== confirm) {
+        showError("Las contraseñas no coinciden.");
+        return;
+      }
+      const displayName = `${firstName} ${lastName}`.trim();
+      setLoading(true, "submit");
+      authActionInProgress = true;
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        try {
+          await updateProfile(cred.user, { displayName });
+        } catch (_) {/* no critico */}
+        await postRegisterRedirect(cred.user, displayName);
+      } catch (err) {
+        authActionInProgress = false;
+        showError(mapFirebaseError(err));
+      } finally {
+        setLoading(false, "submit");
+      }
+    });
+
+    $("google-btn").addEventListener("click", async () => {
+      clearError();
+      setLoading(true, "google");
+      authActionInProgress = true;
+      try {
+        const cred = await signInWithPopup(auth, googleProvider);
+        await postRegisterRedirect(cred.user);
+      } catch (err) {
+        authActionInProgress = false;
+        showError(mapFirebaseError(err));
+      } finally {
+        setLoading(false, "google");
+      }
+    });
+  </script>
+</body>
+</html>

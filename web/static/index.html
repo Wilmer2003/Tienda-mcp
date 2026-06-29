@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AURA Boutique — Asistente de moda con agentes MCP</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    // Guard sincrono: si no hay sesion cacheada, manda al login antes de
+    // pintar nada. onAuthStateChanged (mas abajo) confirma con Firebase
+    // que el cache sigue siendo valido.
+    (function () {
+      try {
+        var raw = localStorage.getItem("aura_user");
+        var cached = raw ? JSON.parse(raw) : null;
+        if (!cached || !cached.uid) {
+          var here = encodeURIComponent(location.pathname + location.search);
+          location.replace("/login?redirect=" + here);
+          return;
+        }
+        window.__AURA_CACHED__ = cached;
+      } catch (e) {
+        location.replace("/login");
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">A</span>
+      <span class="brand-text">
+        <strong>AURA</strong>
+        <small>Boutique</small>
+      </span>
+    </div>
+    <div class="search-box">
+      <input id="search" type="text" placeholder="Buscar prendas, marcas, colores..." />
+    </div>
+    <div class="topbar-right">
+      <button id="toggle-panel" class="ghost-btn" title="Mostrar / ocultar detrás de escena">
+        Detrás de escena
+      </button>
+      <div class="user-tag" id="user-tag" title="Sesión actual">
+        <span id="user-name">Invitada</span>
+        <span id="usuario-id" style="display:none">invitado</span>
+      </div>
+      <script>
+        // Pre-llenar el span con el uid antes de que corra app.js (que lo lee
+        // en DOMContentLoaded). Usa el cache validado por el guard del <head>.
+        (function () {
+          var c = window.__AURA_CACHED__;
+          if (!c) return;
+          document.getElementById("user-name").textContent =
+            c.display_name || c.email || "Cliente";
+          document.getElementById("usuario-id").textContent = c.uid;
+          document.getElementById("user-tag").title = c.email || "";
+        })();
+      </script>
+      <button id="logout-btn" class="ghost-btn" title="Cerrar sesión">Salir</button>
+      <button id="open-cart" class="cart-btn">
+        Bolsa <span id="cart-count" class="cart-count">0</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ===== Catálogo de prendas ===== -->
+    <section class="catalog">
+      <div class="filters">
+        <button data-cat="" class="filter active">Todos</button>
+        <button data-cat="polos" class="filter">Polos</button>
+        <button data-cat="pantalones" class="filter">Pantalones</button>
+        <button data-cat="vestidos" class="filter">Vestidos</button>
+        <button data-cat="calzado" class="filter">Calzado</button>
+        <button data-cat="chaquetas" class="filter">Chaquetas</button>
+        <button data-cat="accesorios" class="filter">Accesorios</button>
+      </div>
+      <div id="products-grid" class="products-grid">
+        <div class="loading">Cargando catálogo...</div>
+      </div>
+    </section>
+
+    <!-- ===== Asistente (chat + panel agentes) ===== -->
+    <aside class="assistant">
+      <div class="tabs">
+        <button class="tab active" data-tab="chat">Asistente</button>
+        <button class="tab" data-tab="agents">Equipo</button>
+        <button class="tab" data-tab="delegas">Delegaciones</button>
+        <button class="tab" data-tab="events">Eventos</button>
+      </div>
+
+      <!-- Tab Chat -->
+      <div id="tab-chat" class="tab-pane active">
+        <div id="chat-log" class="chat-log">
+          <div class="msg agent jefe">
+            <div class="msg-head">JEFE · ASESORA DE ESTILO</div>
+            <div class="msg-body">Bienvenida a AURA Boutique. Soy tu asesora personal y tengo un equipo de especialistas que pueden ayudarte a encontrar el look perfecto, verificar disponibilidad o procesar tu compra. ¿Qué estás buscando hoy? Prueba: <em>"quiero un vestido para una cena"</em>.</div>
+          </div>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" type="text" placeholder="Cuéntame qué buscas..." autocomplete="off" />
+          <button type="submit">Enviar</button>
+        </form>
+        <div class="quick-actions">
+          <button class="quick" data-msg="quiero un vestido">Vestidos</button>
+          <button class="quick" data-msg="busca jeans menos de 200 soles">Jeans &lt; 200</button>
+          <button class="quick" data-msg="el más elegante">El más elegante</button>
+          <button class="quick" data-msg="agrégalo">Agregar foco</button>
+          <button class="quick" data-msg="ver carrito">Ver bolsa</button>
+          <button class="quick" data-msg="muéstrame el historial de movimientos">Historial stock</button>
+          <button class="quick" data-msg="quiero pagar con niubiz">Pagar Niubiz</button>
+        </div>
+      </div>
+
+      <!-- Tab Equipo (jefe + subagentes) -->
+      <div id="tab-agents" class="tab-pane">
+        <p class="hint">El Jefe distribuye el trabajo. Se ilumina el agente que respondió.</p>
+        <div class="team-chart">
+          <div class="agent-card boss" data-agent="jefe">
+            <div class="dot"></div>
+            <strong>Agente Jefe</strong>
+            <small>Asesora · Distribuye el trabajo</small>
+          </div>
+          <div class="boss-arrows">distribuye trabajo a ↓</div>
+          <div class="agent-grid">
+            <div class="agent-card" data-agent="consultas">
+              <div class="dot"></div>
+              <strong>Consultas</strong>
+              <small>Busca prendas · Recomienda · FAQ</small>
+            </div>
+            <div class="agent-card" data-agent="inventarios">
+              <div class="dot"></div>
+              <strong>Inventarios</strong>
+              <small>Stock · Historial de movimientos</small>
+            </div>
+            <div class="agent-card" data-agent="ventas">
+              <div class="dot"></div>
+              <strong>Ventas</strong>
+              <small>Bolsa · Crea pedido · Look completo</small>
+            </div>
+            <div class="agent-card" data-agent="finanzas">
+              <div class="dot"></div>
+              <strong>Finanzas</strong>
+              <small>Procesa pago · Confirma</small>
+            </div>
+          </div>
+        </div>
+        <h4>Tools MCP invocadas</h4>
+        <div id="tools-log" class="tools-log"><em>(aún ninguna)</em></div>
+      </div>
+
+      <!-- Tab Delegaciones (Jefe -> subagente) -->
+      <div id="tab-delegas" class="tab-pane">
+        <p class="hint">Cada vez que el Jefe distribuye un mensaje, queda registrado aquí.</p>
+        <div id="delegas-log" class="delegas-log"><em>(aún ninguna delegación)</em></div>
+      </div>
+
+      <!-- Tab Eventos -->
+      <div id="tab-events" class="tab-pane">
+        <p class="hint">Eventos publicados en el event bus del sistema multi-agente.</p>
+        <div id="events-log" class="events-log"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ===== Drawer de la bolsa ===== -->
+  <div id="cart-drawer" class="drawer">
+    <div class="drawer-head">
+      <h3>Tu bolsa</h3>
+      <button id="close-cart" class="ghost-btn">✕</button>
+    </div>
+    <div id="cart-items" class="cart-items"></div>
+    <div class="drawer-foot">
+      <div class="cart-total">Total: <strong id="cart-total">S/ 0.00</strong></div>
+      <button id="checkout-btn" class="primary-btn">Pagar ahora</button>
+    </div>
+  </div>
+
+  <!-- ===== Modal de checkout ===== -->
+  <div id="checkout-modal" class="modal">
+    <div class="modal-content">
+      <h3>Procesar pago</h3>
+      <p>Selecciona un método de pago para confirmar tu compra.</p>
+      <div class="pay-methods">
+        <button data-method="niubiz">Tarjeta Niubiz</button>
+        <button data-method="yape">Yape</button>
+        <button data-method="paypal">PayPal</button>
+        <button data-method="contra_entrega">Contra entrega</button>
+      </div>
+      <button id="close-checkout" class="ghost-btn">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Guard de sesion: si no hay usuario logueado, manda a /login -->
+  <script type="module">
+    import { auth, signOut, onAuthStateChanged, syncWithBackend, mapFirebaseError }
+      from "/static/firebase-config.js";
+
+    const userTag = document.getElementById("user-tag");
+    const userName = document.getElementById("user-name");
+    const usuarioId = document.getElementById("usuario-id");
+    const logoutBtn = document.getElementById("logout-btn");
+
+    window.AURA_getIdToken = async function () {
+      if (!auth.currentUser) return localStorage.getItem("aura_id_token");
+      return auth.currentUser.getIdToken();
+    };
+
+    function paintUser(profile) {
+      if (!profile) return;
+      userName.textContent = profile.display_name || profile.email || "Cliente";
+      // El chat actual usa usuario_id; lo enlazamos al uid de Firebase.
+      usuarioId.textContent = profile.uid;
+      userTag.title = profile.email || "";
+      if (window.AURA_setAuthenticatedUser) {
+        window.AURA_setAuthenticatedUser(profile);
+      }
+    }
+
+    // 1) Pintar de inmediato lo que ya tengamos cacheado (mejor UX en el primer paint).
+    try {
+      const cached = JSON.parse(localStorage.getItem("aura_user") || "null");
+      if (cached) paintUser(cached);
+    } catch (_) {}
+
+    // 2) Esperar el resultado real de Firebase.
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        localStorage.removeItem("aura_user");
+        localStorage.removeItem("aura_id_token");
+        const here = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?redirect=${here}`;
+        return;
+      }
+      // Sincroniza con el backend (refresca token + perfil).
+      try {
+        const profile = await syncWithBackend(user);
+        paintUser(profile);
+      } catch (err) {
+        console.warn("No se pudo sincronizar con el backend:", err);
+        paintUser({
+          uid: user.uid,
+          display_name: user.displayName || user.email,
+          email: user.email,
+        });
+      }
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        console.warn(mapFirebaseError(err));
+      } finally {
+        localStorage.removeItem("aura_user");
+        localStorage.removeItem("aura_id_token");
+        window.location.href = "/login";
+      }
+    });
+  </script>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
