@@ -41,10 +41,15 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage
 
-from agents.agent import AgentResponse  # reutilizamos el dataclass de respuesta
+from dataclasses import dataclass
 
 
 @dataclass
+class AgentResponse:
+    agente: str
+    mensaje: str
+    latencia_ms: float
+    exito: bool
 class _LCAdapter:
     """Wrapper que expone la misma interfaz que Orquestador.atender()
     pero por debajo usa el grafo LangGraph."""

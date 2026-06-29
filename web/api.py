@@ -38,7 +38,6 @@ from pydantic import BaseModel
 # server.config carga `.env` al importarse — IMPORTAR PRIMERO.
 from server.config import SETTINGS
 from agents.event_bus import BUS, Evento
-from agents.shared_state import STATE
 from web.lc_adapter import LC_ADAPTER
 from server.notion_client import NOTION
 from server.niubiz_client import NIUBIZ, NiubizApiError
