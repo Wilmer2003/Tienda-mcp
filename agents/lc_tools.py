@@ -1,14 +1,19 @@
+"""
+agents/lc_tools.py
+==================
+Carga las tools del MCP server via HTTP (proceso persistente).
+El MCP server debe estar corriendo en http://localhost:8001
+antes de arrancar el servidor web.
+"""
 from __future__ import annotations
-import sys
+
 import os
 from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-PROJECT_ROOT = Path(__file__).parent.parent
-PYTHON_EXEC = sys.executable
-
 _CLIENT: MultiServerMCPClient | None = None
 _TOOLS: list | None = None
+
 
 async def get_mcp_tools() -> list:
     global _CLIENT, _TOOLS
@@ -17,16 +22,14 @@ async def get_mcp_tools() -> list:
     _CLIENT = MultiServerMCPClient(
         {
             "tienda": {
-                "command": PYTHON_EXEC,
-                "args": ["-m", "server.mcp_server"],
-                "transport": "stdio",
-                "cwd": str(PROJECT_ROOT),
-                "env": {**os.environ, "PYTHONIOENCODING": "utf-8"},
+                "url": "http://localhost:8001/mcp",
+                "transport": "streamable_http",
             }
         }
     )
     _TOOLS = await _CLIENT.get_tools()
     return _TOOLS
+
 
 def split_tools(tools: list) -> dict[str, list]:
     mapping = {
