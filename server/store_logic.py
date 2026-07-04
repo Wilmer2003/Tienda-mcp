@@ -135,6 +135,23 @@ class StoreState:
             return ResultadoOperacion(exito=True,
                 mensaje=f"Se agregó {cantidad} x '{producto.nombre}' al carrito.")
 
+    def eliminar_del_carrito(self, usuario_id: str, producto_id: str, cantidad: int | None = None) -> ResultadoOperacion:
+        """Elimina un producto del carrito o reduce su cantidad."""
+        pid = producto_id.upper()
+        with self._lock:
+            carrito = self._carritos.get(usuario_id, [])
+            for i, item in enumerate(carrito):
+                if item.producto_id == pid:
+                    if cantidad is None or cantidad >= item.cantidad:
+                        carrito.pop(i)
+                        msg = f"Se eliminó '{item.nombre}' del carrito."
+                    else:
+                        item.cantidad -= cantidad
+                        item.subtotal = round(item.cantidad * item.precio_unitario, 2)
+                        msg = f"Se redujo la cantidad de '{item.nombre}' en {cantidad}."
+                    return ResultadoOperacion(exito=True, mensaje=msg)
+            return ResultadoOperacion(exito=False, mensaje=f"El producto {pid} no está en el carrito.")
+
     def ver_carrito(self, usuario_id: str) -> Carrito:
         items = self._carritos.get(usuario_id, [])
         total = round(sum(i.subtotal for i in items), 2)

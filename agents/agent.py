@@ -55,10 +55,23 @@ class Agent(ABC):
                  mcp_client: MCPClient,
                  state: SharedState, bus: EventBus) -> None:
         self.nombre = nombre
-        prompt_path = PROMPTS_DIR / prompt_file
-        if not prompt_path.exists():
-            raise FileNotFoundError(f"Falta el prompt {prompt_path}")
-        self.system_prompt = prompt_path.read_text(encoding="utf-8")
+        prompt_mapping = {
+            "consultas": "catalogo_prompt",
+            "inventarios": "inventario_prompt",
+            "finanzas": "pagos_prompt",
+            "soporte": "soporte_prompt",
+            "ventas": "ventas_prompt"
+        }
+        mod_name = f"prompts.{prompt_mapping.get(self.nombre, self.nombre + '_prompt')}"
+        import importlib
+        try:
+            mod = importlib.import_module(mod_name)
+            self.system_prompt = mod.SYSTEM_PROMPT
+        except ImportError:
+            prompt_path = PROMPTS_DIR / prompt_file
+            if not prompt_path.exists():
+                raise FileNotFoundError(f"Falta el prompt {prompt_path} ni modulo {mod_name}")
+            self.system_prompt = prompt_path.read_text(encoding="utf-8")
         self.brain = crear_brain(self.system_prompt, nombre)
         self.mcp = mcp_client
         self.state = state

@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AURA Boutique — Asistente de moda con agentes MCP</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap">
   <script>
-    // Guard sincrono: si no hay sesion cacheada, manda al login antes de
-    // pintar nada. onAuthStateChanged (mas abajo) confirma con Firebase
-    // que el cache sigue siendo valido.
     (function () {
       try {
         var raw = localStorage.getItem("aura_user");
@@ -25,159 +23,206 @@
     })();
   </script>
 </head>
-<body>
-  <header class="topbar">
+<body class="dark-theme">
+  <!-- ====== SIDEBAR ====== -->
+  <aside class="sidebar">
     <div class="brand">
-      <span class="logo">A</span>
-      <span class="brand-text">
+      <div class="logo">A</div>
+      <div class="brand-text">
         <strong>AURA</strong>
-        <small>Boutique</small>
-      </span>
+        <small>BOUTIQUE</small>
+      </div>
     </div>
-    <div class="search-box">
-      <input id="search" type="text" placeholder="Buscar prendas, marcas, colores..." />
-    </div>
-    <div class="topbar-right">
-      <button id="toggle-panel" class="ghost-btn" title="Mostrar / ocultar detrás de escena">
-        Detrás de escena
+
+    <nav class="menu">
+      <button class="menu-item active" data-view="chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Chat
       </button>
-      <div class="user-tag" id="user-tag" title="Sesión actual">
-        <span id="user-name">Invitada</span>
+      <button class="menu-item" data-view="catalog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Catálogo
+      </button>
+      <button class="menu-item" onclick="showToast('Próximamente disponible', 'ok')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        Mis pedidos
+      </button>
+      <button class="menu-item" id="open-cart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+        Carrito <span id="cart-count-side" class="badge">0</span>
+      </button>
+      <button class="menu-item" onclick="showToast('Próximamente disponible', 'ok')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Historial
+      </button>
+      <button class="menu-item" data-view="profile" id="btn-profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Perfil
+      </button>
+      <button class="menu-item" onclick="showToast('Próximamente disponible', 'ok')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        Ayuda
+      </button>
+    </nav>
+
+    <div class="sidebar-promo">
+      <p><em>Estilo que te acompaña,</em> inteligencia que te entiende.</p>
+      <small>Asistencia con IA para una experiencia única. ✨</small>
+    </div>
+
+    <div class="theme-toggle">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg> Modo oscuro</span>
+      <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+  </aside>
+
+  <!-- ====== MAIN CONTENT ====== -->
+  <main class="main-content">
+    <header class="topbar">
+      <div class="greeting">
+        <h1 id="greeting-title">¡Hola, <span id="user-name">Invitada</span>! 👋</h1>
+        <p>¿En qué puedo ayudarte hoy?</p>
+      </div>
+      <div class="topbar-right">
+        <div class="search-box">
+          <input id="search" type="text" placeholder="Buscar prendas, marcas, colores..." />
+        </div>
+        <!-- Elementos obligatorios ocultos o estilizados para no romper JS -->
+        <button id="toggle-panel" class="ghost-btn" style="display:none;">MCP Panel</button>
         <span id="usuario-id" style="display:none">invitado</span>
+        <span id="user-tag" style="display:none"></span>
+        
+        <button id="cart-header-btn" class="ghost-btn icon-only">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+           Carrito <span id="cart-count" class="badge">0</span>
+        </button>
+        <div class="profile-dropdown">
+           <img src="https://ui-avatars.com/api/?name=User&background=333&color=fff" alt="User" class="avatar">
+           <span class="name-short">Jose</span>
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"><polyline points="6 9 12 15 18 9"></polyline></svg>
+           <div class="dropdown-menu">
+              <button id="logout-btn">Salir</button>
+           </div>
+        </div>
       </div>
-      <script>
-        // Pre-llenar el span con el uid antes de que corra app.js (que lo lee
-        // en DOMContentLoaded). Usa el cache validado por el guard del <head>.
-        (function () {
-          var c = window.__AURA_CACHED__;
-          if (!c) return;
-          document.getElementById("user-name").textContent =
-            c.display_name || c.email || "Cliente";
-          document.getElementById("usuario-id").textContent = c.uid;
-          document.getElementById("user-tag").title = c.email || "";
-        })();
-      </script>
-      <button id="logout-btn" class="ghost-btn" title="Cerrar sesión">Salir</button>
-      <button id="open-cart" class="cart-btn">
-        Bolsa <span id="cart-count" class="cart-count">0</span>
-      </button>
+    </header>
+
+    <div class="views-container">
+      <!-- ===== CHAT VIEW ===== -->
+      <section id="view-chat" class="view active assistant">
+        <!-- Pestañas obligatorias para JS -->
+        <div class="tabs" style="display:none;">
+          <button class="tab active" data-tab="chat">Asistente</button>
+          <button class="tab" data-tab="agents">Equipo</button>
+          <button class="tab" data-tab="delegas">Delegaciones</button>
+          <button class="tab" data-tab="events">Eventos</button>
+        </div>
+        
+        <div id="tab-chat" class="tab-pane active chat-container">
+          <div id="chat-log" class="chat-log">
+            <div class="msg agent jefe">
+              <div class="msg-head">JEFE · ASESORA DE ESTILO</div>
+              <div class="msg-body">Bienvenida a AURA Boutique. Soy tu asesora personal y tengo un equipo de especialistas que pueden ayudarte a encontrar el look perfecto, verificar disponibilidad o procesar tu compra. ¿Qué estás buscando hoy? Prueba: <em>"quiero un polo azul"</em>.</div>
+            </div>
+          </div>
+          <div class="chat-input-area">
+             <div id="quick-actions" class="quick-actions" style="display:none;">
+               <button class="quick" data-msg="quiero un vestido">Vestidos</button>
+               <button class="quick" data-msg="busca jeans menos de 200 soles">Jeans &lt; 200</button>
+             </div>
+             <form id="chat-form" class="chat-form">
+                <input id="chat-input" type="text" placeholder="Escribe tu mensaje..." autocomplete="off" />
+                <button type="button" class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
+                <button type="button" class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></button>
+                <button type="submit" id="chat-send" class="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
+             </form>
+             <div class="chat-footer">Puedes preguntar por productos, inventario, pedidos, pagos y más.</div>
+          </div>
+        </div>
+
+        <!-- Paneles obligatorios -->
+        <div id="tab-agents" class="tab-pane hidden">
+          <div class="team-chart">
+            <div class="agent-card boss" data-agent="jefe"><strong>Agente Jefe</strong></div>
+            <div class="agent-card" data-agent="consultas"><strong>Consultas</strong></div>
+            <div class="agent-card" data-agent="inventarios"><strong>Inventarios</strong></div>
+            <div class="agent-card" data-agent="ventas"><strong>Ventas</strong></div>
+            <div class="agent-card" data-agent="finanzas"><strong>Finanzas</strong></div>
+          </div>
+          <div id="tools-log" class="tools-log"></div>
+        </div>
+        <div id="tab-delegas" class="tab-pane hidden"><div id="delegas-log"></div></div>
+        <div id="tab-events" class="tab-pane hidden"><div id="events-log"></div></div>
+      </section>
+
+      
+      <!-- ===== PROFILE VIEW ===== -->
+      <section id="view-profile" class="view profile-view">
+        <div class="profile-header">
+           <h2>Mi Perfil</h2>
+           <p>Información de tu cuenta en AURA Boutique</p>
+        </div>
+        <div class="profile-card">
+           <img id="profile-pic" src="https://ui-avatars.com/api/?name=U&background=333&color=fff" alt="Profile" />
+           <div class="profile-info">
+             <h3 id="profile-name">Cargando...</h3>
+             <p id="profile-email">...</p>
+             <div class="profile-meta">
+                <div class="meta-item"><strong>UID:</strong> <span id="profile-uid">...</span></div>
+                <div class="meta-item"><strong>Método de acceso:</strong> <span id="profile-provider">...</span></div>
+                <div class="meta-item"><strong>Cuenta creada:</strong> <span id="profile-created">...</span></div>
+             </div>
+           </div>
+        </div>
+      </section>
+
+      <!-- ===== CATALOG VIEW ===== -->
+      <section id="view-catalog" class="view catalog">
+        <div class="filters">
+          <button data-cat="" class="filter active">Todos</button>
+          <button data-cat="polos" class="filter">Polos</button>
+          <button data-cat="pantalones" class="filter">Pantalones</button>
+          <button data-cat="vestidos" class="filter">Vestidos</button>
+          <button data-cat="calzado" class="filter">Calzado</button>
+          <button data-cat="chaquetas" class="filter">Chaquetas</button>
+          <button data-cat="accesorios" class="filter">Accesorios</button>
+        </div>
+        <div id="products-grid" class="products-grid">
+          <div class="loading">Cargando catálogo...</div>
+        </div>
+      </section>
     </div>
-  </header>
-
-  <main class="layout">
-    <!-- ===== Catálogo de prendas ===== -->
-    <section class="catalog">
-      <div class="filters">
-        <button data-cat="" class="filter active">Todos</button>
-        <button data-cat="polos" class="filter">Polos</button>
-        <button data-cat="pantalones" class="filter">Pantalones</button>
-        <button data-cat="vestidos" class="filter">Vestidos</button>
-        <button data-cat="calzado" class="filter">Calzado</button>
-        <button data-cat="chaquetas" class="filter">Chaquetas</button>
-        <button data-cat="accesorios" class="filter">Accesorios</button>
-      </div>
-      <div id="products-grid" class="products-grid">
-        <div class="loading">Cargando catálogo...</div>
-      </div>
-    </section>
-
-    <!-- ===== Asistente (chat + panel agentes) ===== -->
-    <aside class="assistant">
-      <div class="tabs">
-        <button class="tab active" data-tab="chat">Asistente</button>
-        <button class="tab" data-tab="agents">Equipo</button>
-        <button class="tab" data-tab="delegas">Delegaciones</button>
-        <button class="tab" data-tab="events">Eventos</button>
-      </div>
-
-      <!-- Tab Chat -->
-      <div id="tab-chat" class="tab-pane active">
-        <div id="chat-log" class="chat-log">
-          <div class="msg agent jefe">
-            <div class="msg-head">JEFE · ASESORA DE ESTILO</div>
-            <div class="msg-body">Bienvenida a AURA Boutique. Soy tu asesora personal y tengo un equipo de especialistas que pueden ayudarte a encontrar el look perfecto, verificar disponibilidad o procesar tu compra. ¿Qué estás buscando hoy? Prueba: <em>"quiero un vestido para una cena"</em>.</div>
-          </div>
-        </div>
-        <form id="chat-form" class="chat-form">
-          <input id="chat-input" type="text" placeholder="Cuéntame qué buscas..." autocomplete="off" />
-          <button type="submit">Enviar</button>
-        </form>
-        <div class="quick-actions">
-          <button class="quick" data-msg="quiero un vestido">Vestidos</button>
-          <button class="quick" data-msg="busca jeans menos de 200 soles">Jeans &lt; 200</button>
-          <button class="quick" data-msg="el más elegante">El más elegante</button>
-          <button class="quick" data-msg="agrégalo">Agregar foco</button>
-          <button class="quick" data-msg="ver carrito">Ver bolsa</button>
-          <button class="quick" data-msg="muéstrame el historial de movimientos">Historial stock</button>
-          <button class="quick" data-msg="quiero pagar con niubiz">Pagar Niubiz</button>
-        </div>
-      </div>
-
-      <!-- Tab Equipo (jefe + subagentes) -->
-      <div id="tab-agents" class="tab-pane">
-        <p class="hint">El Jefe distribuye el trabajo. Se ilumina el agente que respondió.</p>
-        <div class="team-chart">
-          <div class="agent-card boss" data-agent="jefe">
-            <div class="dot"></div>
-            <strong>Agente Jefe</strong>
-            <small>Asesora · Distribuye el trabajo</small>
-          </div>
-          <div class="boss-arrows">distribuye trabajo a ↓</div>
-          <div class="agent-grid">
-            <div class="agent-card" data-agent="consultas">
-              <div class="dot"></div>
-              <strong>Consultas</strong>
-              <small>Busca prendas · Recomienda · FAQ</small>
-            </div>
-            <div class="agent-card" data-agent="inventarios">
-              <div class="dot"></div>
-              <strong>Inventarios</strong>
-              <small>Stock · Historial de movimientos</small>
-            </div>
-            <div class="agent-card" data-agent="ventas">
-              <div class="dot"></div>
-              <strong>Ventas</strong>
-              <small>Bolsa · Crea pedido · Look completo</small>
-            </div>
-            <div class="agent-card" data-agent="finanzas">
-              <div class="dot"></div>
-              <strong>Finanzas</strong>
-              <small>Procesa pago · Confirma</small>
-            </div>
-          </div>
-        </div>
-        <h4>Tools MCP invocadas</h4>
-        <div id="tools-log" class="tools-log"><em>(aún ninguna)</em></div>
-      </div>
-
-      <!-- Tab Delegaciones (Jefe -> subagente) -->
-      <div id="tab-delegas" class="tab-pane">
-        <p class="hint">Cada vez que el Jefe distribuye un mensaje, queda registrado aquí.</p>
-        <div id="delegas-log" class="delegas-log"><em>(aún ninguna delegación)</em></div>
-      </div>
-
-      <!-- Tab Eventos -->
-      <div id="tab-events" class="tab-pane">
-        <p class="hint">Eventos publicados en el event bus del sistema multi-agente.</p>
-        <div id="events-log" class="events-log"></div>
-      </div>
-    </aside>
   </main>
 
-  <!-- ===== Drawer de la bolsa ===== -->
-  <div id="cart-drawer" class="drawer">
+  <!-- ====== CART DRAWER ====== -->
+  <div id="cart-overlay" class="drawer-overlay"></div>
+  <div id="cart-drawer" class="cart-drawer">
     <div class="drawer-head">
-      <h3>Tu bolsa</h3>
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Carrito</h3>
       <button id="close-cart" class="ghost-btn">✕</button>
+    </div>
+    <div class="drawer-subhead">
+      <span id="cart-count-title">0 productos</span>
+      <span id="cart-total-mini" class="cart-total-mini">S/ 0.00</span>
     </div>
     <div id="cart-items" class="cart-items"></div>
     <div class="drawer-foot">
-      <div class="cart-total">Total: <strong id="cart-total">S/ 0.00</strong></div>
-      <button id="checkout-btn" class="primary-btn">Pagar ahora</button>
+      <div class="summary-row">
+         <span>Subtotal</span><span id="cart-subtotal">S/ 0.00</span>
+      </div>
+      <div class="summary-row">
+         <span>Envío</span><span class="free">Gratis</span>
+      </div>
+      <div class="summary-row total">
+         <span>Total</span><strong id="cart-total">S/ 0.00</strong>
+      </div>
+      <button id="checkout-btn" class="primary-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Proceder al pago</button>
+      <button class="secondary-btn">Ver carrito completo</button>
+      <div class="secure-checkout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Compra segura y protegida</div>
     </div>
   </div>
 
-  <!-- ===== Modal de checkout ===== -->
+  <!-- ====== CHECKOUT MODAL ====== -->
   <div id="checkout-modal" class="modal">
     <div class="modal-content">
       <h3>Procesar pago</h3>
@@ -192,13 +237,31 @@
     </div>
   </div>
 
-  <!-- Guard de sesion: si no hay usuario logueado, manda a /login -->
-  <script type="module">
-    import { auth, signOut, onAuthStateChanged, syncWithBackend, mapFirebaseError }
-      from "/static/firebase-config.js";
+  <!-- ====== SCRIPTS ====== -->
+  <script>
+    // Tab switching visual logic
+    document.querySelectorAll('.menu-item[data-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.menu-item[data-view]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-' + btn.getAttribute('data-view')).classList.add('active');
+      });
+    });
+    // Profile dropdown
+    document.querySelector('.profile-dropdown').addEventListener('click', function(e) {
+       this.classList.toggle('open');
+       e.stopPropagation();
+    });
+    document.addEventListener('click', () => {
+       document.querySelector('.profile-dropdown').classList.remove('open');
+    });
+  </script>
 
-    const userTag = document.getElementById("user-tag");
+  <script type="module">
+    import { auth, signOut, onAuthStateChanged, syncWithBackend, mapFirebaseError } from "/static/firebase-config.js";
     const userName = document.getElementById("user-name");
+    const nameShort = document.querySelector(".name-short");
     const usuarioId = document.getElementById("usuario-id");
     const logoutBtn = document.getElementById("logout-btn");
 
@@ -209,49 +272,39 @@
 
     function paintUser(profile) {
       if (!profile) return;
-      userName.textContent = profile.display_name || profile.email || "Cliente";
-      // El chat actual usa usuario_id; lo enlazamos al uid de Firebase.
+      const nm = profile.display_name || profile.email || "Cliente";
+      userName.textContent = nm;
+      if(nameShort) nameShort.textContent = nm.split(' ')[0];
       usuarioId.textContent = profile.uid;
-      userTag.title = profile.email || "";
       if (window.AURA_setAuthenticatedUser) {
         window.AURA_setAuthenticatedUser(profile);
       }
     }
 
-    // 1) Pintar de inmediato lo que ya tengamos cacheado (mejor UX en el primer paint).
     try {
       const cached = JSON.parse(localStorage.getItem("aura_user") || "null");
       if (cached) paintUser(cached);
     } catch (_) {}
 
-    // 2) Esperar el resultado real de Firebase.
     onAuthStateChanged(auth, async (user) => {
+      window.CURRENT_FIREBASE_USER = user;
       if (!user) {
         localStorage.removeItem("aura_user");
         localStorage.removeItem("aura_id_token");
-        const here = encodeURIComponent(window.location.pathname + window.location.search);
-        window.location.href = `/login?redirect=${here}`;
+        window.location.href = `/login`;
         return;
       }
-      // Sincroniza con el backend (refresca token + perfil).
       try {
         const profile = await syncWithBackend(user);
         paintUser(profile);
       } catch (err) {
-        console.warn("No se pudo sincronizar con el backend:", err);
-        paintUser({
-          uid: user.uid,
-          display_name: user.displayName || user.email,
-          email: user.email,
-        });
+        paintUser({ uid: user.uid, display_name: user.displayName || user.email, email: user.email });
       }
     });
 
     logoutBtn.addEventListener("click", async () => {
       try {
         await signOut(auth);
-      } catch (err) {
-        console.warn(mapFirebaseError(err));
       } finally {
         localStorage.removeItem("aura_user");
         localStorage.removeItem("aura_id_token");
@@ -259,7 +312,6 @@
       }
     });
   </script>
-
   <script src="/static/app.js"></script>
 </body>
 </html>

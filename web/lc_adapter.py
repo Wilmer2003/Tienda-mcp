@@ -38,6 +38,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from datetime import datetime
 
 from langchain_core.messages import HumanMessage
 
@@ -50,6 +51,7 @@ class AgentResponse:
     mensaje: str
     latencia_ms: float
     exito: bool
+    tools_invocadas: list[str] = field(default_factory=list)
 class _LCAdapter:
     """Wrapper que expone la misma interfaz que Orquestador.atender()
     pero por debajo usa el grafo LangGraph."""
@@ -59,8 +61,8 @@ class _LCAdapter:
 
     async def init(self) -> None:
         """Llama esto una vez en el startup de FastAPI."""
-        from agents.lc_graph import build_graph
-        self._graph = await build_graph()
+        from graph.builder import build_graph
+        self._graph = build_graph()
         self._ready = True
 
     async def atender(self, mensaje: str,
@@ -72,7 +74,11 @@ class _LCAdapter:
         config = {"configurable": {"thread_id": usuario_id}}
 
         result = await self._graph.ainvoke(
-            {"messages": [HumanMessage(content=mensaje)]},
+            {
+                "messages": [HumanMessage(content=mensaje)],
+                "user_id": usuario_id,
+                "session_id": usuario_id
+            },
             config=config,
         )
 
@@ -80,8 +86,15 @@ class _LCAdapter:
         last_msg = result["messages"][-1]
         respuesta_texto = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
-        # Intentar extraer el nombre del agente que respondió
-        agente = getattr(last_msg, "name", None) or "agente"
+        # Extraer el nombre del agente que respondió
+        agente = result.get("current_agent", "agente")
+        
+        # Extraer tools invocadas en este turno
+        tools_invocadas = []
+        for msg in result.get("messages", []):
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tools_invocadas.append(tc.get("name", "unknown_tool"))
 
         latencia = (time.perf_counter() - t0) * 1000
 
@@ -90,8 +103,35 @@ class _LCAdapter:
             mensaje=respuesta_texto,
             latencia_ms=latencia,
             exito=True,
+            tools_invocadas=tools_invocadas
         )
 
+    async def get_history(self, usuario_id: str) -> list[dict[str, Any]]:
+        if not self._ready:
+            return []
+            
+        config = {"configurable": {"thread_id": usuario_id}}
+        state_snapshot = self._graph.get_state(config)
+        
+        if not state_snapshot or not state_snapshot.values:
+            return []
+            
+        messages = state_snapshot.values.get("messages", [])
+        
+        out = []
+        for m in messages:
+            rol = "usuario" if isinstance(m, HumanMessage) else "agente"
+            if rol == "agente" and not m.content: 
+                # Omitir Tool calls vacios que Llama devuelve
+                continue
+                
+            out.append({
+                "rol": rol,
+                "mensaje": m.content,
+                "timestamp": datetime.now().isoformat() # Aprox
+            })
+            
+        return out
 
 # Instancia global — importar desde api.py
 LC_ADAPTER = _LCAdapter()

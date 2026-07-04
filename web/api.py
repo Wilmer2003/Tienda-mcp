@@ -190,7 +190,7 @@ async def lifespan(app):
     await LC_ADAPTER.init()
     yield
 
-app = FastAPI(title="Tienda Virtual con agentes MCP", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Tienda Virtual con LangGraph", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
@@ -267,16 +267,30 @@ async def ver_carrito(
     user: UserProfile = Depends(get_current_user),
 ) -> dict[str, Any]:
     ensure_same_user(user, usuario_id)
-    import httpx
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "http://localhost:8001/mcp",
-            json={"jsonrpc": "2.0", "method": "tools/call",
-                  "params": {"name": "ver_carrito",
-                             "arguments": {"usuario_id": usuario_id}},
-                  "id": 1},
-        )
-    return resp.json().get("result", {})
+    carrito = TIENDA.ver_carrito(usuario_id)
+    # Formateo compatible con el antiguo MCP:
+    return carrito.model_dump() if hasattr(carrito, "model_dump") else carrito
+
+class ModificarCarritoReq(BaseModel):
+    producto_id: str
+    cantidad: int
+    accion: str = "agregar"  # "agregar" o "eliminar"
+
+@app.post("/api/carrito/{usuario_id}/modificar")
+async def modificar_carrito(
+    usuario_id: str,
+    req: ModificarCarritoReq,
+    user: UserProfile = Depends(get_current_user)
+) -> dict[str, Any]:
+    ensure_same_user(user, usuario_id)
+    if req.accion == "agregar":
+        res = TIENDA.agregar_al_carrito(usuario_id, req.producto_id, req.cantidad)
+    else:
+        res = TIENDA.eliminar_del_carrito(usuario_id, req.producto_id, req.cantidad)
+    
+    if not res.exito:
+        raise HTTPException(status_code=400, detail=res.mensaje)
+    return {"exito": True, "carrito": TIENDA.ver_carrito(usuario_id).model_dump()}
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(
@@ -285,12 +299,36 @@ async def chat(
 ) -> ChatResponse:
     usuario_id = user.uid
     resp = await LC_ADAPTER.atender(req.mensaje, usuario_id=usuario_id)
+    
+    agente = resp.agente or "agente"
+    datos = {}
+    
+    # Inyectar pago_info si es el agente de pagos y detectamos intención de pago
+    if agente in ["pagos", "finanzas"]:
+        # Buscar ID de pedido (ej. ORD-0001)
+        match_ord = re.search(r'ORD-\d+', resp.mensaje.upper())
+        if match_ord:
+            pedido_id = match_ord.group(0)
+            pedido = TIENDA.consultar_pedido(pedido_id)
+            if pedido and pedido.estado.value == "pendiente_pago":
+                # Detectar método de pago en el texto
+                txt = resp.mensaje.lower()
+                metodo = None
+                if "yape" in txt: metodo = "yape"
+                elif "plin" in txt: metodo = "plin"
+                elif "niubiz" in txt or "tarjeta" in txt: metodo = "niubiz"
+                elif "paypal" in txt: metodo = "paypal"
+                elif "contra" in txt: metodo = "contra_entrega"
+                
+                if metodo:
+                    datos["pago_info"] = datos_para_metodo(metodo, pedido_id, pedido.total)
+
     return ChatResponse(
-        agente=resp.agente or "agente",
+        agente=agente,
         intent="",
         mensaje=resp.mensaje,
-        datos={},
-        tools_invocadas=[],
+        datos=datos,
+        tools_invocadas=resp.tools_invocadas,
         latencia_ms=round(resp.latencia_ms, 2),
         exito=resp.exito,
     )
@@ -303,7 +341,8 @@ async def historial(
     user: UserProfile = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     ensure_same_user(user, usuario_id)
-    return []
+    h = await LC_ADAPTER.get_history(usuario_id)
+    return h[-limite:]
 
 
 @app.get("/api/eventos")
@@ -409,6 +448,27 @@ async def niubiz_crear_sesion(req: NiubizSessionRequest,
         "mode": session.mode,
         "action_url": f"{base_url}/api/niubiz/autorizar/{req.pedido_id}?{action_query}",
     }
+
+@app.post("/api/voucher")
+async def subir_voucher(
+    pedido_id: str = Form(...),
+    usuario_id: str = Form(...),
+    voucher: UploadFile = File(...),
+    user: UserProfile = Depends(get_current_user)
+) -> dict[str, Any]:
+    ensure_same_user(user, usuario_id)
+    
+    pedido = TIENDA.consultar_pedido(pedido_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        
+    res = TIENDA.procesar_pago(pedido_id, "yape")
+    
+    if not res.exito:
+        return {"exito": False, "mensaje": res.mensaje}
+        
+    msg = f"Hemos recibido tu voucher para el pedido {pedido_id}. El pago ha sido verificado y tu compra esta confirmada."
+    return {"exito": True, "mensaje": msg}
 
 
 @app.post("/api/niubiz/autorizar/{pedido_id}")

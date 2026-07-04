@@ -30,8 +30,9 @@ class SoporteAgent(Agent):
                     agente=self.nombre,
                     mensaje="Comparteme tu numero de pedido (formato ORD-XXXX).",
                 )
-            r = await self.mcp.call("consultar_pedido", pedido_id=pedido_id)
-            res = r.datos
+            from tools.store_tools import consultar_pedido
+            res_pedido = consultar_pedido.invoke({"pedido_id": pedido_id})
+            res = res_pedido.model_dump() if hasattr(res_pedido, "model_dump") else res_pedido
             if isinstance(res, dict) and "exito" in res and not res["exito"]:
                 return AgentResponse(agente=self.nombre, exito=False,
                                      mensaje=res.get("mensaje", "No encontrado."),

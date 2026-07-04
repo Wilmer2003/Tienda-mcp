@@ -58,7 +58,11 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from agents.event_bus import BUS, EventType
+try:
+    from agents.event_bus import EventType
+except ImportError:
+    EventType = Any
+
 from server.config import SETTINGS
 
 logger = logging.getLogger("notion")
@@ -270,16 +274,21 @@ class NotionClient:
         self._fallback_publicado = True
         self.ultimo_error = motivo
         try:
+            from agents.event_bus import BUS, EventType
             BUS.publish(EventType.NOTION_FALLBACK_LOCAL,
                         publicado_por="notion", datos={"motivo": motivo})
         except Exception:
             pass
         logger.warning(f"[notion] fallback local: {motivo}")
 
-    def _evento(self, tipo: EventType, op: str, db: Optional[str] = None,
+    def _evento(self, tipo: Any, op: str, db: Optional[str] = None,
                 **extras: Any) -> None:
-        BUS.publish(tipo, publicado_por="notion",
-                    datos={"operacion": op, "db": db or "", **extras})
+        try:
+            from agents.event_bus import BUS
+            BUS.publish(tipo, publicado_por="notion",
+                        datos={"operacion": op, "db": db or "", **extras})
+        except ImportError:
+            pass
 
     @property
     def disponible(self) -> bool:

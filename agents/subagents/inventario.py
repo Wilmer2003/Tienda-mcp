@@ -20,9 +20,10 @@ class InventarioAgent(Agent):
         # --- Historial de movimientos ---
         if decision.intent == "ver_historial_stock":
             pid_param = params.get("producto_id") or ""
-            r = await self.mcp.call("consultar_historial_inventario",
-                                    producto_id=pid_param, limite=20)
-            datos = r.datos.get("datos", {}) if isinstance(r.datos, dict) else {}
+            from tools.store_tools import consultar_historial_inventario
+            res = consultar_historial_inventario.invoke({"producto_id": pid_param, "limite": 20})
+            r_datos = res.model_dump() if hasattr(res, "model_dump") else res
+            datos = r_datos.get("datos", {}) if isinstance(r_datos, dict) else {}
             movs = datos.get("movimientos", [])
             if not movs:
                 return AgentResponse(agente=self.nombre,
@@ -57,8 +58,9 @@ class InventarioAgent(Agent):
         self.state.actualizar_sesion(usuario_id,
                                      contexto={"producto_en_foco": pid})
 
-        r = await self.mcp.call("verificar_inventario", producto_id=pid)
-        datos = r.datos
+        from tools.store_tools import verificar_inventario
+        res = verificar_inventario.invoke({"producto_id": pid})
+        datos = res.model_dump() if hasattr(res, "model_dump") else res
 
         # ResultadoOperacion: tiene exito, mensaje, datos.
         if isinstance(datos, dict) and not datos.get("exito", True):

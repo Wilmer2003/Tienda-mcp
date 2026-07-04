@@ -1,3 +1,41 @@
+const productImages = {
+  'P001': 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80',
+  'P002': 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&q=80',
+  'P013': 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&q=80',
+  'P014': 'https://images.unsplash.com/photo-1529374255404-311a2a4f1fd9?w=400&q=80',
+  'P015': 'https://images.unsplash.com/photo-1618517351616-38fb9c5210c6?w=400&q=80',
+  'P031': 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&q=80',
+  'P003': 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&q=80',
+  'P004': 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400&q=80',
+  'P016': 'https://images.unsplash.com/photo-1582552938357-32b906df40cb?w=400&q=80',
+  'P017': 'https://images.unsplash.com/photo-1555689502-c4b22d76c56f?w=400&q=80',
+  'P018': 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400&q=80',
+  'P032': 'https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=400&q=80',
+  'P005': 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400&q=80',
+  'P006': 'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?w=400&q=80',
+  'P019': 'https://images.unsplash.com/photo-1495385794356-15371f348c31?w=400&q=80',
+  'P020': 'https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=400&q=80',
+  'P021': 'https://images.unsplash.com/photo-1605763240000-7e93b172d754?w=400&q=80',
+  'P033': 'https://images.unsplash.com/photo-1515347619362-e64e9a5be433?w=400&q=80',
+  'P007': 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&q=80',
+  'P008': 'https://images.unsplash.com/photo-1614252339460-e1b9b5f93976?w=400&q=80',
+  'P022': 'https://images.unsplash.com/photo-1638247025967-b4e38f787b76?w=400&q=80',
+  'P023': 'https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=400&q=80',
+  'P024': 'https://images.unsplash.com/photo-1562183241-b937e95585b6?w=400&q=80',
+  'P034': 'https://images.unsplash.com/photo-1611244419377-b0a760c19719?w=400&q=80',
+  'P009': 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&q=80',
+  'P010': 'https://images.unsplash.com/photo-1539533113208-f6df8cc8b543?w=400&q=80',
+  'P025': 'https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=400&q=80',
+  'P026': 'https://images.unsplash.com/photo-1545594861-3bef436fb5b1?w=400&q=80',
+  'P027': 'https://images.unsplash.com/photo-1592878904946-b3ce8ae24ea5?w=400&q=80',
+  'P035': 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&q=80',
+  'P011': 'https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=400&q=80',
+  'P012': 'https://images.unsplash.com/photo-1604928135894-1a9be2dc541b?w=400&q=80',
+  'P028': 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=400&q=80',
+  'P029': 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&q=80',
+  'P030': 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400&q=80',
+  'P036': 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&q=80',
+};
 /**
  * Nexus Electronics — app.js
  * Lógica del lado del cliente para interactuar con la API del sistema multi-agente.
@@ -106,9 +144,7 @@ function init() {
     cartDrawer.classList.add('open');
     fetchCart();
   });
-  closeCartBtn.addEventListener('click', () => {
-    cartDrawer.classList.remove('open');
-  });
+  
 
   // Checkout modal
   checkoutBtn.addEventListener('click', () => {
@@ -195,6 +231,15 @@ function setupPaymentMethods() {
       const method = btn.getAttribute('data-method');
       if (method) {
         checkoutModal.classList.remove('open');
+        
+        // Switch to chat view so the user can see the agent processing the payment
+        document.querySelectorAll('.menu-item[data-view]').forEach(b => b.classList.remove('active'));
+        const chatBtn = document.querySelector('.menu-item[data-view="chat"]');
+        if(chatBtn) chatBtn.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const chatView = document.getElementById('view-chat');
+        if(chatView) chatView.classList.add('active');
+        
         sendMessage(`Quiero crear pedido y pagar con ${method}`);
       }
     });
@@ -263,18 +308,16 @@ function renderProducts() {
     const inicial = (p.nombre || '?').trim().charAt(0).toUpperCase();
     return `
       <div class="card" data-id="${p.id}">
-        <div class="thumb ${p.categoria.toLowerCase()}">${inicial}</div>
+        <div class="thumb" style="background-image: url('${productImages[p.id] || ''}');"></div>
         <div class="body">
           <div class="brand-line">${p.marca}</div>
           <div class="name">${p.nombre}</div>
-          <p class="descr">${p.descripcion}</p>
+          <p class="descr">${p.descripcion.substring(0,60)}...</p>
           <div class="meta">
             <div class="price">S/ ${p.precio.toFixed(2)}</div>
-            <div class="rating">★ ${p.rating.toFixed(1)}</div>
           </div>
-          <div class="stock ${stockClass}">${stockText}</div>
           <button class="add" ${isAgotado ? 'disabled' : ''} data-id="${p.id}">
-            ${isAgotado ? 'Agotado' : 'Añadir a la bolsa'}
+            ${isAgotado ? 'Agotado' : 'Añadir al carrito 🛒'}
           </button>
         </div>
       </div>
@@ -319,11 +362,21 @@ function renderCart(cart) {
 
   cartItemsContainer.innerHTML = items.map(item => `
     <div class="cart-item">
-      <div>
-        <div class="name">${item.nombre}</div>
-        <div class="qty">${item.cantidad} x S/ ${item.precio_unitario.toFixed(2)}</div>
+      <img src="${productImages[item.producto_id] || ''}" alt="${item.nombre}">
+      <div class="cart-item-details">
+        <h4>${item.nombre}</h4>
+        <div class="price">S/ ${item.precio_unitario.toFixed(2)}</div>
+        <div class="cart-item-actions">
+           <div class="qty-control">
+             <button onclick="modificarCarritoUI('${item.producto_id}', 'eliminar', 1)">-</button>
+             <span>${item.cantidad}</span>
+             <button onclick="modificarCarritoUI('${item.producto_id}', 'agregar', 1)">+</button>
+           </div>
+           <button class="trash-btn" onclick="modificarCarritoUI('${item.producto_id}', 'eliminar', ${item.cantidad})">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+           </button>
+        </div>
       </div>
-      <div class="subtotal">S/ ${item.subtotal.toFixed(2)}</div>
     </div>
   `).join('');
 }
@@ -352,13 +405,17 @@ async function sendMessage(messageText) {
     // 4) Quitar indicador de cargando
     typingIndicator.remove();
 
+        const tools = resp.tools_invocadas || [];
+    const agenteName = resp.agente || 'asistente';
+    const msgTexto = resp.mensaje || '';
+
     // 5) Renderizar respuesta final del agente
     const formattedMeta = `
-      <strong>${resp.agente.toUpperCase()}</strong> 
-      <span style="color: var(--text-dim); font-size: 10px; margin-left: 6px;">${resp.latencia_ms}ms</span>
-      ${resp.tools_invocadas.length > 0 ? `<span style="background: var(--border); color: var(--accent); padding: 1px 5px; border-radius: 4px; font-size: 10px; margin-left: 6px;" title="${resp.tools_invocadas.join(', ')}">🛠️ ${resp.tools_invocadas.length} tools</span>` : ''}
+      <strong>${agenteName.toUpperCase()}</strong> 
+      <span style="color: var(--text-dim); font-size: 10px; margin-left: 6px;">${resp.latencia_ms || 0}ms</span>
+      ${tools.length > 0 ? `<span style="background: var(--border); color: var(--accent); padding: 1px 5px; border-radius: 4px; font-size: 10px; margin-left: 6px;" title="${tools.join(', ')}">🛠️ ${tools.length} tools</span>` : ''}
     `;
-    appendChatMessage(`agent ${resp.agente}`, formattedMeta, resp.mensaje, true);
+    appendChatMessage(`agent ${agenteName}`, formattedMeta, msgTexto, true);
 
     // 5.b) Si Finanzas devolvio datos de pago, renderizar tarjeta especial
     if (resp.datos && resp.datos.pago_info) {
@@ -366,17 +423,17 @@ async function sendMessage(messageText) {
     }
 
     // 6) Resaltar el agente activo en la pestaña "Agentes"
-    updateAgentHighlight(resp.agente);
+    updateAgentHighlight(agenteName);
 
     // 7) Registrar tools en el historial de tools
-    if (resp.tools_invocadas && resp.tools_invocadas.length > 0) {
-      appendToolsLog(resp.agente, resp.tools_invocadas);
+    if (tools.length > 0) {
+      appendToolsLog(agenteName, tools);
     }
 
     // 8) Mostrar toast rápido de estado
     if (resp.exito) {
       if (messageText.toLowerCase().includes('agrega')) {
-        showToast('Prenda añadida a tu bolsa', 'ok');
+        showToast('Prenda añadida a tu carrito', 'ok');
       } else if (messageText.toLowerCase().includes('pagar') || messageText.toLowerCase().includes('yape') || messageText.toLowerCase().includes('tarjeta')) {
         if (resp.mensaje.toLowerCase().includes('aprobad') || resp.mensaje.toLowerCase().includes('confirmado')) {
           showToast('¡Compra confirmada!', 'ok');
@@ -402,11 +459,15 @@ async function sendMessage(messageText) {
 function appendChatMessage(senderClass, senderHeader, text, isHtml = false) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `msg ${senderClass}`;
-
-  // Usamos innerHTML si el header o mensaje contiene HTML (como tags con latencia o tools badge)
+  const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  let headHtml = senderClass.includes('user') ? 
+    `<div style="font-size:10px; opacity:0.7; text-align:right; margin-bottom:4px;">${time} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" style="vertical-align:middle"><polyline points="20 6 9 17 4 12"></polyline></svg></div>` :
+    `<div class="msg-head"><span class="agent-icon">✨</span> ${senderHeader}</div>`;
+  
   msgDiv.innerHTML = `
-    <div class="msg-head">${senderHeader}</div>
+    ${headHtml}
     <div class="msg-body"></div>
+    ${senderClass.includes('agent') ? `<div style="font-size:10px; color:var(--text-dim); margin-top:8px;">${time}</div>` : ''}
   `;
   
   const bodyDiv = msgDiv.querySelector('.msg-body');
@@ -746,4 +807,89 @@ function showToast(message, type = 'ok') {
   setTimeout(() => {
     toast.classList.remove('show');
   }, 3000);
+}
+
+async function modificarCarritoUI(productoId, accion, cantidad) {
+  if (!currentUser) return;
+  try {
+    const res = await authFetch('/api/carrito/' + currentUser + '/modificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ producto_id: productoId, cantidad: cantidad, accion: accion })
+    });
+    if (res.ok) {
+      await fetchCart();
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+
+// Wire up new header cart button
+const cartHeaderBtn = document.getElementById('cart-header-btn');
+if (cartHeaderBtn) {
+  cartHeaderBtn.addEventListener('click', () => {
+    const drawer = document.getElementById('cart-drawer');
+    if (drawer) drawer.classList.add('open');
+  });
+}
+
+
+// Cart logic updates
+const cartOverlay = document.getElementById('cart-overlay');
+function openCartDrawer() {
+  const drawer = document.getElementById('cart-drawer');
+  if(drawer) drawer.classList.add('open');
+  if(cartOverlay) cartOverlay.classList.add('open');
+}
+function closeCartDrawer() {
+  const drawer = document.getElementById('cart-drawer');
+  if(drawer) drawer.classList.remove('open');
+  if(cartOverlay) cartOverlay.classList.remove('open');
+}
+
+if(openCartBtn) {
+  openCartBtn.removeEventListener('click', openCartBtn.onclick); // clear old
+  openCartBtn.addEventListener('click', openCartDrawer);
+}
+if(closeCartBtn) {
+  closeCartBtn.addEventListener('click', closeCartDrawer);
+}
+if(cartOverlay) {
+  cartOverlay.addEventListener('click', closeCartDrawer);
+}
+const headerCartBtn = document.getElementById('cart-header-btn');
+if(headerCartBtn) {
+  headerCartBtn.addEventListener('click', openCartDrawer);
+}
+
+// ESC to close
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeCartDrawer();
+  }
+});
+
+// Profile logic
+const btnProfile = document.getElementById('btn-profile');
+if(btnProfile) {
+  btnProfile.addEventListener('click', () => {
+    const user = window.CURRENT_FIREBASE_USER;
+    if (!user) return;
+    
+    const pic = document.getElementById('profile-pic');
+    const name = document.getElementById('profile-name');
+    const email = document.getElementById('profile-email');
+    const uid = document.getElementById('profile-uid');
+    const provider = document.getElementById('profile-provider');
+    const created = document.getElementById('profile-created');
+  
+    if (pic) pic.src = user.photoURL || 'https://ui-avatars.com/api/?name=' + (user.displayName || 'U') + '&background=333&color=fff';
+    if (name) name.textContent = user.displayName || 'Sin nombre';
+    if (email) email.textContent = user.email || 'Sin correo';
+    if (uid) uid.textContent = user.uid;
+    if (provider) provider.textContent = user.providerData && user.providerData.length > 0 ? user.providerData[0].providerId : 'Email/Password';
+    if (created) created.textContent = user.metadata && user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleString() : 'Desconocido';
+  });
 }

@@ -16,6 +16,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Optional
+import os
+import json
+import base64
 
 from fastapi import Depends, Header, HTTPException, status
 from pydantic import BaseModel
@@ -41,11 +44,40 @@ def _init_firebase() -> bool:
         return False
     if firebase_admin._apps:  # ya inicializado
         return True
-    if not _CREDENTIALS_PATH.exists():
+        
+    cred = None
+    
+    # 1. Intentar cargar desde variable de entorno (Base64) - Ideal para Render
+    base64_creds = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+    if base64_creds:
+        try:
+            decoded = base64.b64decode(base64_creds).decode('utf-8')
+            cred_dict = json.loads(decoded)
+            cred = credentials.Certificate(cred_dict)
+        except Exception as e:
+            print(f"Error cargando FIREBASE_CREDENTIALS_BASE64: {e}")
+            
+    # 2. Intentar cargar desde JSON en env var
+    elif os.getenv("FIREBASE_CREDENTIALS_JSON"):
+        try:
+            cred_dict = json.loads(os.getenv("FIREBASE_CREDENTIALS_JSON"))
+            cred = credentials.Certificate(cred_dict)
+        except Exception as e:
+            print(f"Error cargando FIREBASE_CREDENTIALS_JSON: {e}")
+            
+    # 3. Intentar cargar desde archivo físico (Local o Secret File de Render)
+    elif _CREDENTIALS_PATH.exists():
+        cred = credentials.Certificate(str(_CREDENTIALS_PATH))
+        
+    if cred is None:
         return False
-    cred = credentials.Certificate(str(_CREDENTIALS_PATH))
-    firebase_admin.initialize_app(cred)
-    return True
+        
+    try:
+        firebase_admin.initialize_app(cred)
+        return True
+    except Exception as e:
+        print(f"Error inicializando Firebase Admin: {e}")
+        return False
 
 
 FIREBASE_READY = _init_firebase()
@@ -89,6 +121,10 @@ def ensure_same_user(profile: UserProfile, requested_uid: str) -> None:
 # -------------------------------------------------------------------------
 def verify_token(id_token: str) -> dict[str, Any]:
     """Verifica un ID token de Firebase. Lanza HTTPException si es invalido."""
+    global FIREBASE_READY
+    if not FIREBASE_READY:
+        FIREBASE_READY = _init_firebase()
+
     if not FIREBASE_READY or fb_auth is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -135,6 +171,10 @@ async def get_current_user(
     authorization: Optional[str] = Header(default=None),
 ) -> UserProfile:
     """Modo invitado si Firebase no está listo."""
+    global FIREBASE_READY
+    if not FIREBASE_READY:
+        FIREBASE_READY = _init_firebase()
+        
     if not FIREBASE_READY or not authorization or not authorization.lower().startswith("bearer "):
         return UserProfile(
             uid="cliente-01",

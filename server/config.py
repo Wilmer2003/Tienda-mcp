@@ -90,16 +90,22 @@ class Settings:
 
     @classmethod
     def cargar(cls) -> "Settings":
+        def _get_env(key: str) -> Optional[str]:
+            val = os.getenv(key)
+            if val and "REEMPLAZA_CON" in val:
+                return None
+            return val
+
         return cls(
             notion=NotionConfig(
-                api_key=os.getenv("NOTION_API_KEY") or None,
-                db_productos=os.getenv("NOTION_PRODUCTOS_DB_ID") or None,
-                db_ordenes=os.getenv("NOTION_ORDENES_DB_ID") or None,
-                db_sessions=os.getenv("NOTION_SESSIONS_DB_ID") or None,
-                db_prompts=os.getenv("NOTION_PROMPTS_DB_ID") or None,
-                db_base_conocimiento=os.getenv("NOTION_BASE_CONOCIMIENTO_DB_ID") or None,
-                db_vouchers=os.getenv("NOTION_VOUCHERS_DB_ID") or None,
-                db_transacciones_niubiz=os.getenv("NOTION_TRANSACCIONES_NIUBIZ_DB_ID") or None,
+                api_key=_get_env("NOTION_API_KEY") or _get_env("NOTION_TOKEN") or None,
+                db_productos=_get_env("NOTION_PRODUCTOS_DB_ID") or _get_env("NOTION_DATABASE_ID") or None,
+                db_ordenes=_get_env("NOTION_ORDENES_DB_ID") or None,
+                db_sessions=_get_env("NOTION_SESSIONS_DB_ID") or None,
+                db_prompts=_get_env("NOTION_PROMPTS_DB_ID") or None,
+                db_base_conocimiento=_get_env("NOTION_BASE_CONOCIMIENTO_DB_ID") or None,
+                db_vouchers=_get_env("NOTION_VOUCHERS_DB_ID") or None,
+                db_transacciones_niubiz=_get_env("NOTION_TRANSACCIONES_NIUBIZ_DB_ID") or None,
             ),
             niubiz=NiubizConfig(
                 username=os.getenv("NIUBIZ_USERNAME") or None,

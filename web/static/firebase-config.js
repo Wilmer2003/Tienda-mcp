@@ -14,20 +14,23 @@ import {
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 
+// REEMPLAZA ESTE BLOQUE CON TU PROPIA CONFIGURACION DE FIREBASE:
+// 1. Ve a console.firebase.google.com -> Configuración del proyecto
+// 2. Busca "Tus aplicaciones" -> Aplicación Web (</>)
+// 3. Copia el objeto firebaseConfig y pégalo aquí:
 const firebaseConfig = {
-  apiKey: "AIzaSyA5Mn4fETGk1Iw3X1CfMWdn7bbvnj1iqYM",
-  authDomain: "upao-proyects.firebaseapp.com",
-  projectId: "upao-proyects",
-  storageBucket: "upao-proyects.firebasestorage.app",
-  messagingSenderId: "877165514263",
-  appId: "1:877165514263:web:2d3b11232472c0b3585652",
-  measurementId: "G-375DFD01YJ",
+  apiKey: "AIzaSyBs1lQNWMQhnJ5AnlDXcFRDXCFc68SnYag",
+  authDomain: "tienda-aura-bd398.firebaseapp.com",
+  projectId: "tienda-aura-bd398",
+  storageBucket: "tienda-aura-bd398.firebasestorage.app",
+  messagingSenderId: "58148469099",
+  appId: "1:58148469099:web:7f2179faaec8b34adb342e"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 // Mantiene la sesion al refrescar el navegador.
-setPersistence(auth, browserLocalPersistence).catch(() => {});
+setPersistence(auth, browserLocalPersistence).catch(() => { });
 
 const googleProvider = new GoogleAuthProvider();
 

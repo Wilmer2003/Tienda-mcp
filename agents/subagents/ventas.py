@@ -18,14 +18,18 @@ class VentasAgent(Agent):
         usuario_id = contexto.get("usuario_id", "anonimo")
 
         if decision.intent == "vaciar_carrito":
-            r = await self.mcp.call("vaciar_carrito", usuario_id=usuario_id)
+            from tools.store_tools import vaciar_carrito
+            res_vaciar = vaciar_carrito.invoke({"usuario_id": usuario_id})
+            r_datos = res_vaciar.model_dump() if hasattr(res_vaciar, "model_dump") else res_vaciar
             return AgentResponse(agente=self.nombre,
-                                 mensaje=r.datos.get("mensaje", "Carrito vaciado."),
-                                 datos=r.datos)
+                                 mensaje=r_datos.get("mensaje", "Carrito vaciado."),
+                                 datos=r_datos)
 
         if decision.intent == "ver_carrito":
-            r = await self.mcp.call("ver_carrito", usuario_id=usuario_id)
-            return self._resumir_carrito(r.datos)
+            from tools.store_tools import ver_carrito
+            res_ver = ver_carrito.invoke({"usuario_id": usuario_id})
+            r_datos = res_ver.model_dump() if hasattr(res_ver, "model_dump") else res_ver
+            return self._resumir_carrito(r_datos)
 
         # --- CIERRE DE ORDEN ---
         # Cuando el cliente quiere comprar/finalizar/cerrar, Ventas:
@@ -33,12 +37,13 @@ class VentasAgent(Agent):
         #   2) pide confirmacion EXPLICITA ("¿confirmas?")
         #   3) anota una "ultima_sugerencia" = derivar a finanzas
         if decision.intent == "crear_pedido":
-            ver = await self.mcp.call("ver_carrito", usuario_id=usuario_id)
-            carrito = ver.datos
+            from tools.store_tools import ver_carrito
+            res_ver = ver_carrito.invoke({"usuario_id": usuario_id})
+            carrito = res_ver.model_dump() if hasattr(res_ver, "model_dump") else res_ver
             items = carrito.get("items", [])
             if not items:
                 return AgentResponse(agente=self.nombre, exito=False,
-                                     mensaje="Tu bolsa esta vacia. Te ayudo a buscar algo?")
+                                     mensaje="Tu carrito está vacío. Te ayudo a buscar algo?")
             lineas = [f"  {i['cantidad']} x {i['nombre']} = S/ {i['subtotal']:.2f}"
                       for i in items]
             total = carrito.get("total", 0)
@@ -63,10 +68,12 @@ class VentasAgent(Agent):
         if decision.intent == "confirmar_compra":
             # El cliente confirmo: derivamos al agente Finanzas para crear
             # el pedido. El Jefe captara `siguiente_agente` y lo invocara.
-            ver = await self.mcp.call("ver_carrito", usuario_id=usuario_id)
-            if not ver.datos.get("items"):
+            from tools.store_tools import ver_carrito
+            res_ver = ver_carrito.invoke({"usuario_id": usuario_id})
+            ver_datos = res_ver.model_dump() if hasattr(res_ver, "model_dump") else res_ver
+            if not ver_datos.get("items"):
                 return AgentResponse(agente=self.nombre, exito=False,
-                                     mensaje="Tu bolsa esta vacia.")
+                                     mensaje="Tu carrito está vacío.")
             return AgentResponse(
                 agente=self.nombre,
                 mensaje="Orden confirmada. Te paso con el agente de Finanzas "
@@ -90,10 +97,13 @@ class VentasAgent(Agent):
                     mensaje="No tengo claro que producto agregar. Dime el ID "
                             "(ej. P003) o el nombre.",
                 )
-            r = await self.mcp.call("agregar_al_carrito",
-                                    usuario_id=usuario_id,
-                                    producto_id=pid, cantidad=cant)
-            res = r.datos
+            from tools.store_tools import agregar_al_carrito, ver_carrito
+            res_agregar = agregar_al_carrito.invoke({
+                "usuario_id": usuario_id,
+                "producto_id": pid,
+                "cantidad": cant
+            })
+            res = res_agregar.model_dump() if hasattr(res_agregar, "model_dump") else res_agregar
             if isinstance(res, dict) and not res.get("exito", True):
                 # Stock insuficiente o producto inexistente.
                 info = res.get("datos", {})
@@ -123,10 +133,11 @@ class VentasAgent(Agent):
                              datos={"usuario_id": usuario_id, "producto_id": pid,
                                     "cantidad": cant})
             # Mostrar carrito actual y, si solo hay 1 laptop, sugerir accesorio.
-            ver = await self.mcp.call("ver_carrito", usuario_id=usuario_id)
-            resp = self._resumir_carrito(ver.datos)
+            res_ver = ver_carrito.invoke({"usuario_id": usuario_id})
+            ver_datos = res_ver.model_dump() if hasattr(res_ver, "model_dump") else res_ver
+            resp = self._resumir_carrito(ver_datos)
             resp.mensaje = res.get("mensaje", "") + "\n" + resp.mensaje
-            self._maybe_upsell(ver.datos, resp, usuario_id=usuario_id)
+            self._maybe_upsell(ver_datos, resp, usuario_id=usuario_id)
             return resp
 
         return AgentResponse(

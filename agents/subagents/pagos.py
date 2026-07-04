@@ -30,8 +30,9 @@ class PagosAgent(Agent):
             # (caer al flujo de abajo, encadenando con el metodo si vino)
 
         # crear_pedido o derivacion natural desde "comprar".
-        r = await self.mcp.call("crear_pedido", usuario_id=usuario_id)
-        res = r.datos
+        from tools.store_tools import crear_pedido
+        res_crear = crear_pedido.invoke({"usuario_id": usuario_id})
+        res = res_crear.model_dump() if hasattr(res_crear, "model_dump") else res_crear
         if isinstance(res, dict) and not res.get("exito", True):
             # Conflicto: el carrito ya no tiene stock (otro agente se lo llevo).
             self.bus.publish(EventType.PEDIDO_RECHAZADO,
@@ -79,9 +80,9 @@ class PagosAgent(Agent):
                          "paypal, contra_entrega."),
             )
 
-        r = await self.mcp.call("procesar_pago",
-                                pedido_id=pedido_id, metodo_pago=metodo)
-        res = r.datos
+        from tools.store_tools import procesar_pago
+        res_pago = procesar_pago.invoke({"pedido_id": pedido_id, "metodo_pago": metodo})
+        res = res_pago.model_dump() if hasattr(res_pago, "model_dump") else res_pago
         if isinstance(res, dict) and not res.get("exito", True):
             self.bus.publish(EventType.PAGO_RECHAZADO,
                              publicado_por=self.nombre, datos=res)

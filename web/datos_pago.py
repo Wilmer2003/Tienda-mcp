@@ -51,10 +51,42 @@ def datos_para_metodo(metodo: str, pedido_id: str, total: float) -> dict[str, An
         })
         return base
 
+    if m in ("yape", "plin"):
+        base.update({
+            "instrucciones": (
+                f"1. Abre tu app de {m.capitalize()}.\n"
+                f"2. Escanea el QR o envía S/ {total:.2f} al número {_TELEFONO_AURA}.\n"
+                f"3. En el mensaje pon tu número de pedido: {pedido_id}\n"
+                "4. Sube la captura de pantalla (voucher) para confirmar tu compra."
+            ),
+            "requiere_voucher": True,
+            "qr_data": _qr_base64_png(f"00020101021226500014*.pe.com.yape0224{_TELEFONO_AURA}5204000053036045404{total:.2f}5802PE5913AURA Boutique6004LIMA6304"),
+        })
+        return base
+
+    if m == "contra_entrega":
+        base.update({
+            "instrucciones": (
+                "Pagas en efectivo o tarjeta al momento de recibir tu pedido. "
+                "No requiere enviar voucher previo."
+            ),
+            "requiere_voucher": False,
+        })
+        return base
+
+    if m == "paypal":
+        base.update({
+            "instrucciones": (
+                "Envía el pago a pagos@auraboutique.com y sube tu comprobante."
+            ),
+            "requiere_voucher": True,
+        })
+        return base
+
     base.update({
         "instrucciones": (
             f"No reconocemos el metodo '{metodo}'. "
-            "El unico medio de pago aceptado es tarjeta Niubiz."
+            "Por favor, elige Yape, Plin, Tarjeta o Contra Entrega."
         ),
         "requiere_voucher": False,
         "invalido": True,
@@ -62,4 +94,4 @@ def datos_para_metodo(metodo: str, pedido_id: str, total: float) -> dict[str, An
     return base
 
 
-METODOS_VALIDOS = {"tarjeta", "niubiz"}
+METODOS_VALIDOS = {"tarjeta", "niubiz", "yape", "plin", "contra_entrega", "paypal"}

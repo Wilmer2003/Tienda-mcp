@@ -25,9 +25,12 @@ class CatalogoAgent(Agent):
         if "producto_id" in params and decision.intent in (
             "ver_detalle", "buscar_producto"
         ):
-            r = await self.mcp.call("obtener_producto",
-                                    producto_id=params["producto_id"])
-            datos = r.datos
+            from tools.store_tools import obtener_producto
+            res = obtener_producto.invoke({"producto_id": params["producto_id"]})
+            datos = res.model_dump() if hasattr(res, "model_dump") else res
+            if isinstance(datos, dict) and "exito" not in datos:
+                datos["exito"] = True
+            
             if isinstance(datos, dict) and "exito" in datos and not datos["exito"]:
                 return AgentResponse(agente=self.nombre,
                                      mensaje=datos.get("mensaje", "No encontrado."),
@@ -47,13 +50,13 @@ class CatalogoAgent(Agent):
 
         # Busqueda general (intent buscar_producto o desconocido pero con keywords).
         excluir = params.get("excluir")  # del context_resolver: "hay mas?"
-        r = await self.mcp.call(
-            "buscar_productos",
-            query=params.get("query", ""),
-            categoria=params.get("categoria", ""),
-            precio_max=params.get("precio_max", 0.0),
-        )
-        productos = r.datos if isinstance(r.datos, list) else []
+        from tools.store_tools import buscar_productos as tool_buscar_productos
+        res_buscar = tool_buscar_productos.invoke({
+            "query": params.get("query", ""),
+            "categoria": params.get("categoria", ""),
+            "precio_max": params.get("precio_max", 0.0)
+        })
+        productos = [p.model_dump() if hasattr(p, "model_dump") else p for p in res_buscar] if isinstance(res_buscar, list) else []
         if excluir:
             productos = [p for p in productos if p.get("id") != excluir]
         if not productos:
