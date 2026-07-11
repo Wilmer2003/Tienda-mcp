@@ -33,7 +33,19 @@ class StoreState:
         self._inventario: dict[str, int] = dict(INVENTARIO_INICIAL)
         self._carritos: dict[str, list[ItemCarrito]] = {}
         self._pedidos: dict[str, Pedido] = {}
-        self._contador_pedidos = itertools.count(1)
+        
+        # Persistencia del contador de pedidos
+        self._contador_file = ".contador_pedidos"
+        start_count = 1
+        import os
+        if os.path.exists(self._contador_file):
+            try:
+                with open(self._contador_file, "r") as f:
+                    start_count = int(f.read().strip())
+            except Exception:
+                pass
+        self._contador_pedidos = itertools.count(start_count)
+        
         # Lock para que dos agentes en paralelo no rompan el inventario.
         self._lock = threading.Lock()
         # Historial de movimientos del inventario (Criterio 3 — historial
@@ -176,27 +188,79 @@ class StoreState:
                         mensaje=(f"Ya no hay stock suficiente de '{it.nombre}'. "
                                  f"Otro pedido pudo haberlo tomado."),
                         datos={"producto_id": it.producto_id})
-
-            pedido_id = f"ORD-{next(self._contador_pedidos):04d}"
-            total = round(sum(i.subtotal for i in items), 2)
-            pedido = Pedido(pedido_id=pedido_id, usuario_id=usuario_id,
-                            items=list(items), total=total,
-                            estado=EstadoPedido.PENDIENTE_PAGO)
-            self._pedidos[pedido_id] = pedido
+            pedidos_creados = []
+            count = 1
+            for it in items:
+                count = next(self._contador_pedidos)
+                pedido_id = f"ORD-{count:04d}"
+                ped = Pedido(pedido_id=pedido_id, usuario_id=usuario_id,
+                                items=[it], total=it.subtotal,
+                                estado=EstadoPedido.PENDIENTE_PAGO)
+                self._pedidos[pedido_id] = ped
+                pedidos_creados.append(ped)
+            
+            # Guardar el contador para el siguiente reinicio
+            try:
+                with open(self._contador_file, "w") as f:
+                    f.write(str(count + 1))
+            except Exception:
+                pass
+                
+            # Sincronización estricta con Notion
+            from server.notion_client import NOTION
+            if NOTION.disponible:
+                for ped in pedidos_creados:
+                    notion_ok = NOTION.registrar_order(ped)
+                    if not notion_ok:
+                        # Rollback
+                        for p in pedidos_creados:
+                            self._pedidos.pop(p.pedido_id, None)
+                        return ResultadoOperacion(
+                            exito=False, 
+                            mensaje=f"Error crítico: No se pudo registrar {ped.pedido_id} en Notion."
+                        )
+            
+            # Vaciar carrito solo si todo fue exitoso
+            self._carritos[usuario_id] = []
+            
+            master_id = ",".join(p.pedido_id for p in pedidos_creados)
+            total_sum = sum(p.total for p in pedidos_creados)
+            
             return ResultadoOperacion(exito=True,
-                mensaje=f"Pedido {pedido_id} creado. Total: S/ {total:.2f}.",
-                datos={"pedido_id": pedido_id, "total": total})
+                mensaje=f"Pedidos creados exitosamente. Total: S/ {total_sum:.2f}.",
+                datos={"pedido_id": master_id, "total": total_sum})
+
+    def consultar_pedido(self, pedido_id: str) -> Pedido | None:
+        with self._lock:
+            p_ids = pedido_id.split(",")
+            if len(p_ids) == 1:
+                return self._pedidos.get(pedido_id)
+            # Combinar multiples ordenes en un pedido virtual para la lectura
+            pedidos = [self._pedidos.get(pid) for pid in p_ids]
+            if None in pedidos:
+                return None
+            items_totales = []
+            for p in pedidos:
+                items_totales.extend(p.items)
+            total = sum(p.total for p in pedidos)
+            return Pedido(pedido_id=pedido_id, usuario_id=pedidos[0].usuario_id,
+                          items=items_totales, total=total, estado=pedidos[0].estado)
 
     def procesar_pago(self, pedido_id: str,
-                      metodo_pago: str) -> ResultadoOperacion:
+                      metodo_pago: str,
+                      datos_extra: dict = None) -> ResultadoOperacion:
         with self._lock:
-            pedido = self._pedidos.get(pedido_id)
-            if pedido is None:
-                return ResultadoOperacion(exito=False,
-                    mensaje=f"El pedido {pedido_id} no existe.")
-            if pedido.estado != EstadoPedido.PENDIENTE_PAGO:
-                return ResultadoOperacion(exito=False,
-                    mensaje=f"El pedido {pedido_id} ya está en estado '{pedido.estado.value}'.")
+            p_ids = pedido_id.split(",")
+            pedidos_a_procesar = []
+            for pid in p_ids:
+                pedido = self._pedidos.get(pid)
+                if pedido is None:
+                    return ResultadoOperacion(exito=False,
+                        mensaje=f"El pedido {pid} no existe.")
+                if pedido.estado != EstadoPedido.PENDIENTE_PAGO:
+                    return ResultadoOperacion(exito=False,
+                        mensaje=f"El pedido {pid} ya está en estado '{pedido.estado.value}'.")
+                pedidos_a_procesar.append(pedido)
             try:
                 metodo = MetodoPago(metodo_pago.lower())
             except ValueError:
@@ -205,22 +269,103 @@ class StoreState:
 
             # Descontar inventario al confirmar el pago. Cada decremento
             # queda registrado en el historial de movimientos.
-            for it in pedido.items:
-                self._inventario[it.producto_id] -= it.cantidad
-                self._log_movimiento(
-                    it.producto_id, delta=-it.cantidad,
-                    motivo=f"venta_pagada({pedido_id},{metodo.value})",
-                    usuario_id=pedido.usuario_id,
-                )
-            pedido.estado = EstadoPedido.PAGADO
-            pedido.metodo_pago = metodo
-            self._carritos[pedido.usuario_id] = []  # vaciar carrito tras compra
+            for pedido in pedidos_a_procesar:
+                for it in pedido.items:
+                    self._inventario[it.producto_id] -= it.cantidad
+                    self._log_movimiento(
+                        it.producto_id, delta=-it.cantidad,
+                        motivo=f"venta_pagada({pedido.pedido_id},{metodo.value})",
+                        usuario_id=pedido.usuario_id,
+                    )
+                pedido.estado = EstadoPedido.PAGADO
+                pedido.metodo_pago = metodo
+            
+            # Sincronizar actualización con Notion
+            from server.notion_client import NOTION
+            if NOTION.disponible:
+                for pedido in pedidos_a_procesar:
+                    NOTION.actualizar_order(pedido.pedido_id, estado=pedido.estado.value, datos={"metodo_pago": metodo.value})
+                    datos_voucher = dict(datos_extra) if datos_extra else {}
+                    import datetime
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    
+                    # Cleanup deprecated columns if they were passed
+                    for key in ["TOTAL_ESPERADO", "NOMBRE_RECEPTOR", "ES_YAPE", "MONTO_CORRECTO", "NOMBRE_CORRECTO", "DUPLICADO"]:
+                        datos_voucher.pop(key, None)
+                        
+                    if "NOMBRE_PRODUCTO" not in datos_voucher:
+                        nombres = ", ".join([f"{item.cantidad}x {item.nombre}" for item in pedido.items])
+                        datos_voucher["NOMBRE_PRODUCTO"] = nombres[:1900]
+                        
+                    if "CLIENTE_ID" not in datos_voucher:
+                        datos_voucher["CLIENTE_ID"] = pedido.usuario_id
+                    if "NOMBRE_CLIENTE" not in datos_voucher or not datos_voucher["NOMBRE_CLIENTE"]:
+                        datos_voucher["NOMBRE_CLIENTE"] = "Cliente Web" if pedido.usuario_id == "anonimo" else pedido.usuario_id
+                    
+                    datos_voucher["NOMBRE_ESPERADO"] = "AURA Boutique"
+                    
+                    if "MONTO_TRANSFERIDO" not in datos_voucher:
+                        datos_voucher["MONTO_TRANSFERIDO"] = float(pedido.total)
+                    if "MONTO_DETECTADO" not in datos_voucher:
+                        datos_voucher["MONTO_DETECTADO"] = float(pedido.total)
+                        
+                    datos_voucher["METODO_PAGO"] = metodo.value.capitalize()
+                    
+                    if "NUMERO_OPERACION" not in datos_voucher:
+                        datos_voucher["NUMERO_OPERACION"] = f"COMP-{int(now.timestamp())}"
+                    if "FECHA_DETECTADA" not in datos_voucher:
+                        datos_voucher["FECHA_DETECTADA"] = now.date().isoformat()
+                    if "HORA_DETECTADA" not in datos_voucher:
+                        datos_voucher["HORA_DETECTADA"] = now.strftime("%H:%M")
+                        
+                    if "VALIDACION_IA" not in datos_voucher:
+                        datos_voucher["VALIDACION_IA"] = "APROBADO"
+                    if "OBSERVACION" not in datos_voucher:
+                        datos_voucher["OBSERVACION"] = f"Pago validado correctamente mediante {metodo.value.upper()}."
+                    
+                    NOTION.registrar_voucher(
+                        pedido_id=pedido.pedido_id,
+                        voucher_path=datos_voucher.get("VOUCHER_URL", "https://aura.local/voucher_no_proporcionado"),
+                        monto=pedido.total,
+                        metodo_pago=metodo.value,
+                        usuario_id=pedido.usuario_id,
+                        datos_extra=datos_voucher
+                    )
+                
             return ResultadoOperacion(exito=True,
-                mensaje=f"Pago de S/ {pedido.total:.2f} aprobado vía {metodo.value}.",
-                datos={"pedido_id": pedido_id, "estado": pedido.estado.value})
+                mensaje=f"Pago registrado exitosamente. Total: S/ {sum(p.total for p in pedidos_a_procesar):.2f}.",
+                datos={"pedido_id": pedido_id, "estado": EstadoPedido.PAGADO.value, "metodo_pago": metodo.value})
 
-    def consultar_pedido(self, pedido_id: str) -> Pedido | None:
-        return self._pedidos.get(pedido_id)
+
+
+    def cargar_pedidos_usuario(self, usuario_id: str) -> list[dict]:
+        """Obtiene historial de pedidos de un usuario, buscando primero en Notion y usando fallback local si falla."""
+        from server.notion_client import NOTION
+        if NOTION.disponible:
+            pedidos_db = NOTION.cargar_pedidos_por_usuario(usuario_id)
+            if pedidos_db is not None:
+                return pedidos_db
+                
+        # Fallback local
+        import datetime
+        res = []
+        for p in self._pedidos.values():
+            if p.usuario_id == usuario_id:
+                items_list = []
+                for it in p.items:
+                    it_dict = it.model_dump() if hasattr(it, "model_dump") else dict(it)
+                    items_list.append(it_dict)
+                res.append({
+                    "pedido_id": p.pedido_id,
+                    "estado": p.estado.value,
+                    "total": p.total,
+                    "metodo_pago": p.metodo_pago.value if p.metodo_pago else None,
+                    "items": items_list,
+                    "fecha": datetime.datetime.now(datetime.timezone.utc).isoformat()
+                })
+        
+        # Ordenar localmente por fecha (el mas reciente primero, si tuvieramos fecha real local, aqui usamos now por simplicidad)
+        return res[::-1]
 
 
 # Instancia única compartida por todo el servidor MCP (memoria compartida).

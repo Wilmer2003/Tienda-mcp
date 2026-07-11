@@ -262,8 +262,28 @@ class NotionClient:
                     # Mapeamos al formato de esquema {nombre: {type: tipo}}
                     for name, val in row_props.items():
                         schema[name] = {"type": val.get("type", "rich_text")}
+                else:
+                    # Hardcoded fallback para base de datos vacía
+                    schema = {
+                        "ITEM": {"type": "title"},
+                        "VALIDACION_IA": {"type": "select"},
+                        "FECHA_DETECTADA": {"type": "rich_text"},
+                        "CLIENTE_ID ": {"type": "rich_text"},
+                        "MONTO_DETECTADO": {"type": "number"},
+                        "MEDIO_PAGO": {"type": "select"},
+                        "VOUCHER_URL": {"type": "url"},
+                        "NOMBRE_CLIENTE ": {"type": "rich_text"},
+                        "CREATED_AT": {"type": "date"},
+                        "OBSERVACION": {"type": "rich_text"},
+                        "METODO_PAGO": {"type": "rich_text"},
+                        "MONTO_TRANSFERIDO": {"type": "number"},
+                        "NUMERO_OPERACION": {"type": "rich_text"},
+                        "NOMBRE_PRODUCTO": {"type": "rich_text"},
+                        "NOMBRE_ESPERADO": {"type": "rich_text"},
+                        "HORA_DETECTADA": {"type": "rich_text"}
+                    }
             except Exception as e:
-                logger.warning(f"[notion] _obtener_esquema query fallback error: {e}")
+                logger.error(f"[notion] _obtener_esquema fallback error: {e}")
                 
         return schema
 
@@ -469,9 +489,8 @@ class NotionClient:
         self._evento(EventType.NOTION_CONSULTA_INICIADA,
                      "crear_pedido", db="ordenes", pedido_id=pedido_id)
         try:
-            # 1. Obtener schema para saber qué propiedades existen y cuál es el title
-            db = self._client.databases.retrieve(database_id=cfg.db_ordenes)
-            schema = db.get("properties", {})
+            # 1. Obtener schema robusto para saber qué propiedades existen y cuál es el title
+            schema = self._obtener_esquema(cfg.db_ordenes)
             title_prop = next(
                 (name for name, val in schema.items() if val.get("type") == "title"),
                 "pedido_id",
@@ -485,48 +504,48 @@ class NotionClient:
             )
             results = resp.get("results", []) if resp else []
             
-            # 3. Preparar propiedades
+            # 3. Preparar propiedades mapeando de forma flexible
             props: dict[str, dict] = {}
             
+            # Helper para encontrar el nombre exacto de la columna en Notion
+            def get_col(nombres_posibles):
+                for name in schema.keys():
+                    if name.lower().strip() in nombres_posibles:
+                        return name
+                return None
+
             # usuario_id
-            for usr_name in ["usuario_id", "usuario", "user_id"]:
-                if usr_name in schema:
-                    props[usr_name] = {"rich_text": [{"text": {"content": usuario_id}}]}
-                    break
-                    
+            usr_name = get_col(["usuario_id", "usuario", "user_id", "cliente_id", "cliente"])
+            if usr_name:
+                props[usr_name] = {"rich_text": [{"text": {"content": usuario_id}}]}
+                
             # total
-            for tot_name in ["total", "monto", "total_pago"]:
-                if tot_name in schema:
-                    props[tot_name] = {"number": float(total)}
-                    break
-                    
+            tot_name = get_col(["total", "monto", "total_pago", "monto_detectado", "total_esperado", "monto detectado", "total esperado"])
+            if tot_name:
+                props[tot_name] = {"number": float(total)}
+                
             # estado
-            for est_name in ["estado", "status", "state"]:
-                if est_name in schema:
-                    props[est_name] = {"select": {"name": estado}}
-                    break
-                    
+            est_name = get_col(["estado", "status", "state", "validacion_ia", "validacion ia"])
+            if est_name:
+                props[est_name] = {"select": {"name": estado}}
+                
             # items
-            for items_name in ["items", "productos", "pedido_items"]:
-                if items_name in schema:
-                    props[items_name] = {"rich_text": [{"text": {
-                        "content": json.dumps(items, ensure_ascii=False)[:1900]
-                    }}]}
-                    break
-                    
+            items_name = get_col(["items", "productos", "pedido_items"])
+            if items_name:
+                props[items_name] = {"rich_text": [{"text": {
+                    "content": json.dumps(items, ensure_ascii=False)[:1900]
+                }}]}
+                
             # metodo_pago
             if metodo_pago:
-                for met_name in ["metodo_pago", "metodo", "payment_method"]:
-                    if met_name in schema:
-                        props[met_name] = {"select": {"name": metodo_pago}}
-                        break
-                        
+                met_name = get_col(["metodo_pago", "metodo", "payment_method", "medio_pago", "medio pago"])
+                if met_name:
+                    props[met_name] = {"select": {"name": metodo_pago}}
+                    
             # creado_en
-            for date_name in ["creado_en", "fecha", "date", "created_at"]:
-                if date_name in schema:
-                    if not results:
-                        props[date_name] = {"date": {"start": datetime.now(timezone.utc).isoformat()}}
-                    break
+            date_name = get_col(["creado_en", "fecha", "date", "created_at"])
+            if date_name and not results:
+                props[date_name] = {"date": {"start": datetime.now(timezone.utc).isoformat()}}
             
             if results:
                 page_id = results[0]["id"]
@@ -743,6 +762,88 @@ class NotionClient:
             metodo_pago=metodo_val
         )
 
+    def cargar_pedidos_por_usuario(self, usuario_id: str) -> Optional[list[dict]]:
+        """Obtiene el historial de pedidos de un usuario directamente desde la DB ORDENES."""
+        if not self.disponible:
+            return None
+        cfg = SETTINGS.notion
+        if not cfg.db_ordenes:
+            return None
+        self._evento(EventType.NOTION_CONSULTA_INICIADA, "cargar_pedidos", db="ordenes", usuario=usuario_id)
+        try:
+            schema = self._obtener_esquema(cfg.db_ordenes)
+            
+            def get_col(nombres_posibles):
+                for name in schema.keys():
+                    if name.lower().strip() in nombres_posibles:
+                        return name
+                return None
+                
+            usr_prop = get_col(["usuario_id", "usuario", "user_id", "cliente_id", "cliente"])
+            if not usr_prop:
+                return None
+            
+            resp = self._query(
+                cfg.db_ordenes,
+                filter={"property": usr_prop, "rich_text": {"equals": usuario_id}},
+                sorts=[{"timestamp": "created_time", "direction": "descending"}]
+            )
+            
+            if not resp or "results" not in resp:
+                return []
+                
+            pedidos = []
+            for row in resp["results"]:
+                props = row.get("properties", {})
+                
+                pedido_id = ""
+                for name, val in props.items():
+                    if val.get("type") == "title":
+                        pedido_id = _texto(val)
+                        break
+                        
+                estado = ""
+                total = 0
+                metodo = ""
+                items_str = ""
+                
+                for k, v in props.items():
+                    kl = k.lower().strip()
+                    if kl in ["estado", "status", "state", "validacion_ia", "validacion ia"]:
+                        if not estado: estado = _texto(v)
+                    elif kl in ["total", "monto", "total_pago", "total_esperado", "monto_detectado", "total esperado", "monto detectado"]:
+                        if not total: total = _numero(v)
+                    elif kl in ["metodo_pago", "metodo", "payment_method", "medio_pago", "medio pago"]:
+                        metodo = _texto(v)
+                    elif kl in ["items", "productos", "pedido_items"]:
+                        items_str = _texto(v)
+                        
+                fecha = row.get("created_time")
+                
+                items = []
+                if items_str:
+                    try:
+                        items = json.loads(items_str)
+                    except Exception:
+                        pass
+                        
+                pedidos.append({
+                    "pedido_id": pedido_id,
+                    "estado": estado,
+                    "total": total,
+                    "metodo_pago": metodo,
+                    "items": items,
+                    "fecha": fecha
+                })
+                
+            self._evento(EventType.NOTION_CONSULTA_EXITOSA, "cargar_pedidos", db="ordenes", items=len(pedidos))
+            return pedidos
+        except Exception as e:
+            self.ultimo_error = str(e)
+            self._evento(EventType.NOTION_CONSULTA_FALLIDA, "cargar_pedidos", db="ordenes", error=str(e))
+            logger.error(f"[notion] cargar_pedidos_por_usuario: {e}")
+            return None
+
     def actualizar_order(self, pedido_id: str, estado: str, datos: Optional[dict] = None) -> bool:
         """Actualiza el estado y datos de un pedido existente en Notion."""
         if not self.disponible:
@@ -753,8 +854,7 @@ class NotionClient:
         self._evento(EventType.NOTION_CONSULTA_INICIADA, "actualizar_order", db="ordenes", pedido_id=pedido_id)
         try:
             # 1. Obtener schema para saber qué propiedades existen y cuál es el title
-            db = self._client.databases.retrieve(database_id=cfg.db_ordenes)
-            schema = db.get("properties", {})
+            schema = self._obtener_esquema(cfg.db_ordenes)
             title_prop = next(
                 (name for name, val in schema.items() if val.get("type") == "title"),
                 "pedido_id",
@@ -774,29 +874,34 @@ class NotionClient:
             
             # 2. Preparar propiedades a actualizar
             properties = {}
-            for est_name in ["estado", "status", "state"]:
-                if est_name in schema:
-                    properties[est_name] = {"select": {"name": estado}}
-                    break
-                    
+            
+            def get_col(nombres_posibles):
+                for name in schema.keys():
+                    if name.lower().strip() in nombres_posibles:
+                        return name
+                return None
+
+            est_name = get_col(["estado", "status", "state", "validacion_ia", "validacion ia"])
+            if est_name:
+                properties[est_name] = {"select": {"name": estado}}
+                
             if datos:
                 if "total" in datos:
-                    for tot_name in ["total", "monto", "total_pago"]:
-                        if tot_name in schema:
-                            properties[tot_name] = {"number": float(datos["total"])}
-                            break
+                    tot_name = get_col(["total", "monto", "total_pago", "monto_detectado", "total_esperado", "monto detectado", "total esperado"])
+                    if tot_name:
+                        properties[tot_name] = {"number": float(datos["total"])}
+                        
                 if "metodo_pago" in datos and datos["metodo_pago"]:
-                    for met_name in ["metodo_pago", "metodo", "payment_method"]:
-                        if met_name in schema:
-                            properties[met_name] = {"select": {"name": str(datos["metodo_pago"])}}
-                            break
+                    met_name = get_col(["metodo_pago", "metodo", "payment_method", "medio_pago", "medio pago"])
+                    if met_name:
+                        properties[met_name] = {"select": {"name": str(datos["metodo_pago"])}}
+                        
                 if "items" in datos and datos["items"]:
-                    for items_name in ["items", "productos", "pedido_items"]:
-                        if items_name in schema:
-                            properties[items_name] = {"rich_text": [{"text": {
-                                "content": json.dumps(datos["items"], ensure_ascii=False)[:1900]
-                            }}]}
-                            break
+                    items_name = get_col(["items", "productos", "pedido_items"])
+                    if items_name:
+                        properties[items_name] = {"rich_text": [{"text": {
+                            "content": json.dumps(datos["items"], ensure_ascii=False)[:1900]
+                        }}]}
             
             self._client.pages.update(page_id=page_id, properties=properties)
             self._evento(EventType.NOTION_CONSULTA_EXITOSA, "actualizar_order", db="ordenes", pedido_id=pedido_id)
@@ -891,18 +996,18 @@ class NotionClient:
             logger.error(f"[notion] actualizar_stock_producto error: {e}")
             return False
 
-    def registrar_voucher(self, pedido_id: str, voucher_path: str, monto: float, metodo_pago: str, usuario_id: str = "") -> bool:
-        """Registra un voucher de pago completo en Notion con soporte para múltiples esquemas e idempotencia."""
+    def registrar_voucher(self, pedido_id: str, voucher_path: str, monto: float, metodo_pago: str, usuario_id: str = "", datos_extra: dict = None) -> bool:
+        """Registra un voucher de pago completo en Notion con soporte para múltiples esquemas e idempotencia, y campos arbitrarios."""
         if not self.disponible:
             return False
         cfg = SETTINGS.notion
-        if not cfg.db_vouchers:
+        target_db = cfg.db_vouchers or cfg.db_ordenes
+        if not target_db:
             return False
         self._evento(EventType.NOTION_CONSULTA_INICIADA, "registrar_voucher", db="vouchers", pedido=pedido_id)
         try:
             # Obtener el esquema para hacer un mapeo tolerante
-            db = self._client.databases.retrieve(database_id=cfg.db_vouchers)
-            schema = db.get("properties", {})
+            schema = self._obtener_esquema(target_db)
             
             title_prop = next(
                 (name for name, val in schema.items() if val.get("type") == "title"),
@@ -920,12 +1025,6 @@ class NotionClient:
                 if path_name in schema:
                     props[path_name] = {"rich_text": [{"text": {"content": voucher_path}}]}
                     break
-            else:
-                rt_prop = next(
-                    (name for name, val in schema.items() if val.get("type") == "rich_text" and name not in (title_prop, "usuario_id", "metodo_pago")),
-                    "archivo"
-                )
-                props[rt_prop] = {"rich_text": [{"text": {"content": voucher_path}}]}
                 
             # 2. Usuario
             for usr_name in ["usuario_id", "usuario", "user_id"]:
@@ -952,6 +1051,31 @@ class NotionClient:
                         props[date_name] = {"date": {"start": datetime.now(timezone.utc).isoformat()}}
                     break
                     
+            # 6. Mapeo dinámico de datos_extra
+            if datos_extra:
+                for key, val in datos_extra.items():
+                    for schema_key, schema_val in schema.items():
+                        if schema_key.lower().strip() == key.lower().strip() and schema_key not in props:
+                            tipo = schema_val.get("type")
+                            if tipo == "rich_text":
+                                props[schema_key] = {"rich_text": [{"text": {"content": str(val)[:1900]}}]}
+                            elif tipo == "title":
+                                props[schema_key] = {"title": [{"text": {"content": str(val)[:1900]}}]}
+                            elif tipo == "number":
+                                try:
+                                    props[schema_key] = {"number": float(val)}
+                                except ValueError:
+                                    pass
+                            elif tipo == "checkbox":
+                                props[schema_key] = {"checkbox": bool(val)}
+                            elif tipo == "select":
+                                props[schema_key] = {"select": {"name": str(val)[:100]}}
+                            elif tipo == "date":
+                                props[schema_key] = {"date": {"start": str(val)}}
+                            elif tipo == "url":
+                                props[schema_key] = {"url": str(val)[:1900]}
+                            break
+                    
             if page_id:
                 self._client.pages.update(
                     page_id=page_id,
@@ -961,7 +1085,7 @@ class NotionClient:
             else:
                 props[title_prop] = {"title": [{"text": {"content": pedido_id}}]}
                 self._client.pages.create(
-                    parent={"database_id": cfg.db_vouchers},
+                    parent={"database_id": target_db},
                     properties=props,
                 )
                 self._evento(EventType.NOTION_CONSULTA_EXITOSA, "registrar_voucher", db="vouchers")
@@ -977,19 +1101,19 @@ class NotionClient:
         if not self.disponible:
             return None
         cfg = SETTINGS.notion
-        if not cfg.db_vouchers:
+        target_db = cfg.db_vouchers or cfg.db_ordenes
+        if not target_db:
             return None
         self._evento(EventType.NOTION_CONSULTA_INICIADA, "buscar_voucher", db="vouchers", pedido=pedido_id)
         try:
-            db = self._client.databases.retrieve(database_id=cfg.db_vouchers)
-            schema = db.get("properties", {})
+            schema = self._obtener_esquema(target_db)
             title_prop = next(
                 (name for name, val in schema.items() if val.get("type") == "title"),
                 "pedido_id",
             )
             
             resp = self._query(
-                cfg.db_vouchers,
+                target_db,
                 filter={"property": title_prop, "title": {"equals": pedido_id}},
                 page_size=1
             )
@@ -1007,7 +1131,7 @@ class NotionClient:
                     break
                     
             monto = 0.0
-            for amt_name in ["monto", "monto_total", "total", "amount"]:
+            for amt_name in ["monto_transferido", "monto_detectado", "monto", "monto_total", "total", "amount"]:
                 val = _numero(_get_prop(props, amt_name))
                 if val:
                     monto = val

@@ -15,8 +15,8 @@ Agentes disponibles (ELIGE SOLO UNO):
 
 IMPORTANTE: Ignora mensajes anteriores. Céntrate en la última intención.
 - Si solo saluda ("hola", "buenos días") o hace preguntas generales -> soporte.
-- Si pide "agregar" o "carrito" SIN mencionar pagos -> ventas.
-- Si pide "pagar", "yape", "niubiz", "comprar" o "crear pedido" -> pagos.
+- Si pide "agregar", "carrito", "comprar [un producto]" o expresa deseo por un producto ("quiero el jeans...") -> ventas.
+- Si pide "pagar el carrito", "yape", "niubiz", "finalizar compra" o "crear pedido" -> pagos.
 - Si pide ver catálogo, buscar prendas o recomendaciones -> catalogo.
 
 Responde SOLO con el nombre del agente (una sola palabra, en minúsculas).

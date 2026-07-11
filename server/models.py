@@ -37,6 +37,7 @@ class MetodoPago(str, Enum):
     PLIN = "plin"
     PAYPAL = "paypal"
     CONTRA_ENTREGA = "contra_entrega"
+    NIUBIZ = "niubiz"
 
 
 class Producto(BaseModel):

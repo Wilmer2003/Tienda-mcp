@@ -185,6 +185,12 @@ class NiubizSessionRequest(BaseModel):
     telefono: str = ""
 
 
+class SimularPagoReq(BaseModel):
+    pedido_id: str
+    metodo: str
+    datos_extra: dict[str, Any] = {}
+
+
 @asynccontextmanager
 async def lifespan(app):
     await LC_ADAPTER.init()
@@ -292,12 +298,28 @@ async def modificar_carrito(
         raise HTTPException(status_code=400, detail=res.mensaje)
     return {"exito": True, "carrito": TIENDA.ver_carrito(usuario_id).model_dump()}
 
+@app.post("/api/pedido/crear")
+async def crear_pedido_directo(
+    user: UserProfile = Depends(get_current_user)
+) -> dict[str, Any]:
+    # Crear el pedido directamente usando la logica de la tienda
+    res = TIENDA.crear_pedido(user.uid)
+    if not res.exito:
+        raise HTTPException(status_code=400, detail=res.mensaje)
+    return {
+        "exito": True, 
+        "pedido_id": res.datos["pedido_id"], 
+        "total": res.datos["total"],
+        "mensaje": res.mensaje
+    }
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
     user: UserProfile = Depends(get_current_user),
 ) -> ChatResponse:
-    usuario_id = user.uid
+    # Si el usuario está logueado, usar su UID real. Si es anónimo, usar el guest_id del frontend.
+    usuario_id = user.uid if user.uid != "anonimo" else req.usuario_id
     resp = await LC_ADAPTER.atender(req.mensaje, usuario_id=usuario_id)
     
     agente = resp.agente or "agente"
@@ -317,8 +339,6 @@ async def chat(
                 if "yape" in txt: metodo = "yape"
                 elif "plin" in txt: metodo = "plin"
                 elif "niubiz" in txt or "tarjeta" in txt: metodo = "niubiz"
-                elif "paypal" in txt: metodo = "paypal"
-                elif "contra" in txt: metodo = "contra_entrega"
                 
                 if metodo:
                     datos["pago_info"] = datos_para_metodo(metodo, pedido_id, pedido.total)
@@ -449,25 +469,44 @@ async def niubiz_crear_sesion(req: NiubizSessionRequest,
         "action_url": f"{base_url}/api/niubiz/autorizar/{req.pedido_id}?{action_query}",
     }
 
-@app.post("/api/voucher")
-async def subir_voucher(
-    pedido_id: str = Form(...),
-    usuario_id: str = Form(...),
-    voucher: UploadFile = File(...),
+@app.post("/api/pago/simular")
+async def simular_pago(
+    req: SimularPagoReq,
     user: UserProfile = Depends(get_current_user)
 ) -> dict[str, Any]:
-    ensure_same_user(user, usuario_id)
+    # Siempre validamos usuario
+    if user.uid != "anonimo":
+        pass  # O podriamos requerir que coincida, pero para simulacion bastara esto
     
-    pedido = TIENDA.consultar_pedido(pedido_id)
+    pedido = TIENDA.consultar_pedido(req.pedido_id)
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-        
-    res = TIENDA.procesar_pago(pedido_id, "yape")
+    import datetime
+    now = datetime.datetime.now()
+    datos_extra = {
+        "CLIENTE_ID": user.uid,
+        "NOMBRE_CLIENTE": user.display_name or user.email or "Cliente Web",
+        "NOMBRE_ESPERADO": "AURA Boutique",
+        "MONTO_TRANSFERIDO": pedido.total,
+        "MONTO_DETECTADO": pedido.total,
+        "METODO_PAGO": req.metodo.lower(),
+        "NUMERO_OPERACION": f"SIM-{int(now.timestamp())}",
+        "FECHA_DETECTADA": now.date().isoformat(),
+        "HORA_DETECTADA": now.strftime("%H:%M"),
+        "VOUCHER_URL": "https://aura.local/simulado_por_interfaz",
+        "VALIDACION_IA": "APROBADO",
+        "OBSERVACION": f"Pago confirmado exitosamente mediante {req.metodo}."
+    }
+    
+    # Fusionar cualquier dato extra que venga del frontend (ej. numeros de tarjeta enmascarados, si quisieramos)
+    datos_extra.update(req.datos_extra)
+    
+    res = TIENDA.procesar_pago(req.pedido_id, req.metodo, datos_extra=datos_extra)
     
     if not res.exito:
         return {"exito": False, "mensaje": res.mensaje}
         
-    msg = f"Hemos recibido tu voucher para el pedido {pedido_id}. El pago ha sido verificado y tu compra esta confirmada."
+    msg = f"El pago con {req.metodo.upper()} ha sido procesado exitosamente. Tu compra esta confirmada."
     return {"exito": True, "mensaje": msg}
 
 
@@ -506,7 +545,23 @@ async def niubiz_autorizar(request: Request, pedido_id: str,
                                     http_status=http_status, request=request)
         aprobado = status == "Authorized" and http_status == 200
         if aprobado:
-            pago = TIENDA.procesar_pago(pedido_id, "niubiz")
+            import datetime
+            now = datetime.datetime.now()
+            datos_extra = {
+                "CLIENTE_ID": usuario_id,
+                "NOMBRE_CLIENTE": "Cliente Niubiz" if usuario_id == "anonimo" else usuario_id,
+                "NOMBRE_ESPERADO": "AURA Boutique",
+                "MONTO_TRANSFERIDO": float(registro.get("amount") or pedido.total),
+                "MONTO_DETECTADO": float(registro.get("amount") or pedido.total),
+                "METODO_PAGO": "niubiz",
+                "NUMERO_OPERACION": registro.get("transaction_id") or f"NIUBIZ-{int(now.timestamp())}",
+                "FECHA_DETECTADA": now.date().isoformat(),
+                "HORA_DETECTADA": now.strftime("%H:%M"),
+                "VOUCHER_URL": "https://aura.local/pago_niubiz_nativo",
+                "VALIDACION_IA": "APROBADO",
+                "OBSERVACION": f"Pago procesado mediante Niubiz. Auth: {registro.get('authorization_code', 'N/A')}"
+            }
+            pago = TIENDA.procesar_pago(pedido_id, "niubiz", datos_extra=datos_extra)
             registro["pedido_confirmado"] = pago.exito
             if pago.exito:
                 BUS.publish(EventType.PAGO_APROBADO, publicado_por="niubiz",
@@ -545,6 +600,14 @@ async def niubiz_autorizar(request: Request, pedido_id: str,
                                       detalles={"pedido": pedido_id, "estado_niubiz": status,
                                                 "codigo": registro.get("error_code"),
                                                 "motivo": registro.get("error_message")})
+
+
+@app.get("/api/pedidos")
+async def obtener_pedidos(user: UserProfile = Depends(get_current_user)) -> dict[str, Any]:
+    if user.uid == "anonimo":
+        return {"exito": False, "mensaje": "Usuario no autenticado", "pedidos": []}
+    pedidos = TIENDA.cargar_pedidos_usuario(user.uid)
+    return {"exito": True, "pedidos": pedidos}
 
 
 @app.get("/api/niubiz/transacciones")

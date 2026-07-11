@@ -155,6 +155,12 @@ function init() {
       return;
     }
     cartDrawer.classList.remove('open');
+    const step1 = document.getElementById('checkout-step-1');
+    const step2 = document.getElementById('checkout-step-2');
+    if (step1 && step2) {
+      step1.style.display = 'block';
+      step2.style.display = 'none';
+    }
     checkoutModal.classList.add('open');
   });
 
@@ -187,6 +193,9 @@ function init() {
   // Cargar catálogo inicial y carrito
   fetchProducts();
   fetchCart();
+  
+  // Exponer fetchOrders globalmente para que index.html pueda llamarlo
+  window.fetchOrders = fetchOrders;
 
   // Polling de eventos (cada 1.5 segundos)
   pollEvents();
@@ -227,23 +236,40 @@ function setupCategoryFilters() {
 // Configuración de métodos de pago en el modal
 function setupPaymentMethods() {
   document.querySelectorAll('.pay-methods button').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const method = btn.getAttribute('data-method');
       if (method) {
-        checkoutModal.classList.remove('open');
+        const step1 = document.getElementById('checkout-step-1');
+        const step2 = document.getElementById('checkout-step-2');
+        const paymentContainer = document.getElementById('payment-container');
         
-        // Switch to chat view so the user can see the agent processing the payment
-        document.querySelectorAll('.menu-item[data-view]').forEach(b => b.classList.remove('active'));
-        const chatBtn = document.querySelector('.menu-item[data-view="chat"]');
-        if(chatBtn) chatBtn.classList.add('active');
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        const chatView = document.getElementById('view-chat');
-        if(chatView) chatView.classList.add('active');
+        step1.style.display = 'none';
+        step2.style.display = 'block';
+        paymentContainer.innerHTML = '<div class="loading">Generando pedido...</div>';
         
-        sendMessage(`Quiero crear pedido y pagar con ${method}`);
+        try {
+          const resPedido = await authFetch('/api/pedido/crear', { method: 'POST' });
+          const dataPedido = await resPedido.json();
+          if (!resPedido.ok || !dataPedido.exito) throw new Error(dataPedido.mensaje || 'Error creando pedido');
+          
+          const resPago = await fetch(`/api/datos-pago?metodo=${method}&pedido_id=${dataPedido.pedido_id}&total=${dataPedido.total}`);
+          const info = await resPago.json();
+          
+          renderPaymentUI(info, paymentContainer);
+        } catch(err) {
+          paymentContainer.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        }
       }
     });
   });
+
+  const backBtn = document.getElementById('back-checkout');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      document.getElementById('checkout-step-2').style.display = 'none';
+      document.getElementById('checkout-step-1').style.display = 'block';
+    });
+  }
 }
 
 // Cargar productos desde el backend
@@ -326,9 +352,21 @@ function renderProducts() {
 
   // Agregar eventos a los botones de añadir al carrito
   productsGrid.querySelectorAll('.add').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const pid = btn.getAttribute('data-id');
-      sendMessage(`Agrega ${pid} al carrito`);
+      
+      // Mostrar estado de carga en el botón
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Agregando...';
+      btn.disabled = true;
+      
+      try {
+        await modificarCarritoUI(pid, 'agregar', 1);
+        showToast('Prenda añadida a tu carrito', 'ok');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
     });
   });
 }
@@ -347,11 +385,21 @@ async function fetchCart() {
 
 // Renderizar contenido del carrito
 function renderCart(cart) {
-  // Actualizar contador en la cabecera
-  cartCountSpan.textContent = cart.cantidad_items || 0;
+  // Actualizar todos los contadores
+  const count = cart.cantidad_items || 0;
+  cartCountSpan.textContent = count;
+  const sideCount = document.getElementById('cart-count-side');
+  if (sideCount) sideCount.textContent = count;
+  const titleCount = document.getElementById('cart-count-title');
+  if (titleCount) titleCount.textContent = `${count} productos`;
 
-  // Actualizar total
-  cartTotalSpan.textContent = `S/ ${(cart.total || 0).toFixed(2)}`;
+  // Actualizar todos los totales
+  const totalStr = `S/ ${(cart.total || 0).toFixed(2)}`;
+  cartTotalSpan.textContent = totalStr;
+  const miniTotal = document.getElementById('cart-total-mini');
+  if (miniTotal) miniTotal.textContent = totalStr;
+  const subTotal = document.getElementById('cart-subtotal');
+  if (subTotal) subTotal.textContent = totalStr;
 
   // Actualizar items
   const items = cart.items || [];
@@ -659,49 +707,34 @@ async function iniciarPagoNiubiz(info, button) {
     button.disabled = false;
     button.textContent = info.boton_texto || 'Pagar con Niubiz';
     showToast(err.message || 'Error con Niubiz', 'err');
+    showToast(err.message || 'Error con Niubiz', 'err');
   }
 }
 
-// Renderiza la tarjeta de pago con QR / datos bancarios y form de voucher.
-function renderPagoCard(info) {
-  const card = document.createElement('div');
-  card.className = 'msg agent finanzas pago-card';
-
+function renderPaymentUI(info, container) {
   let datosHtml = '';
   if (info.metodo === 'niubiz') {
     datosHtml = `
       <div class="pago-row"><span>Pasarela</span><strong>${info.pasarela}</strong></div>
       <div class="pago-row"><span>Moneda</span><strong class="mono">${info.moneda}</strong></div>
-      <div class="pago-row"><span>Confirmacion</span><strong>Automatica</strong></div>
+      <div class="pago-row" style="margin-bottom:10px;"><small>${info.instrucciones}</small></div>
     `;
   } else if (info.metodo === 'tarjeta') {
     datosHtml = `
-      <div class="pago-row"><span>Banco</span><strong>${info.banco}</strong></div>
-      <div class="pago-row"><span>Cuenta</span><strong class="mono">${info.cuenta}</strong></div>
-      <div class="pago-row"><span>CCI</span><strong class="mono">${info.cci}</strong></div>
-      <div class="pago-row"><span>Titular</span><strong>${info.titular}</strong></div>
-      <div class="pago-row"><span>RUC</span><strong class="mono">${info.ruc}</strong></div>
+      <div class="pago-row" style="margin-bottom:10px;"><small>${info.instrucciones}</small></div>
     `;
   } else if (info.metodo === 'yape' || info.metodo === 'plin') {
     datosHtml = `
-      <div class="pago-row"><span>Número</span><strong class="mono">${info.numero}</strong></div>
-      <div class="pago-row"><span>Titular</span><strong>${info.titular}</strong></div>
-      <div class="pago-qr">
-        <img src="${info.qr}" alt="QR ${info.metodo.toUpperCase()}" />
-        <small>Escanea desde tu app ${info.metodo.toUpperCase()}</small>
+      <div class="pago-qr" style="margin-top:10px; text-align:center;">
+        <img src="${info.qr_data || info.qr}" alt="QR ${info.metodo.toUpperCase()}" style="max-width:150px; border-radius:8px;"/>
+        <div style="margin-top:10px;"><small>${info.instrucciones}</small></div>
       </div>
-    `;
-  } else if (info.metodo === 'paypal') {
-    datosHtml = `
-      <div class="pago-row"><span>Email PayPal</span><strong>${info.email}</strong></div>
-      <div class="pago-row"><span>Titular</span><strong>${info.titular}</strong></div>
     `;
   }
 
   const total = (info.total || 0).toFixed(2);
-  card.innerHTML = `
-    <div class="msg-head">FINANZAS · DATOS DE PAGO</div>
-    <div class="msg-body">
+  container.innerHTML = `
+    <div class="pago-card" style="padding:0; border:none; background:transparent;">
       <div class="pago-header">
         <div class="pago-metodo">${info.metodo.toUpperCase()}</div>
         <div class="pago-total">S/ ${total}</div>
@@ -709,21 +742,44 @@ function renderPagoCard(info) {
       <div class="pago-pedido">Pedido <strong>${info.pedido_id}</strong></div>
       <div class="pago-datos">${datosHtml}</div>
       ${info.requiere_pasarela ? `
-        <button type="button" class="primary-btn niubiz-submit">
+        <button type="button" class="primary-btn niubiz-submit" style="width:100%; margin-top:10px;">
           ${info.boton_texto || 'Pagar con Niubiz'}
         </button>
       ` : ''}
+      ${info.requiere_niubiz_simulado ? `
+        <button type="button" class="primary-btn niubiz-sim-submit" data-pedido-id="${info.pedido_id}" style="width:100%; margin-top:10px;">
+          ${info.boton_texto || 'Abrir Niubiz (Simulado)'}
+        </button>
+      ` : ''}
+      ${info.requiere_tarjeta_simulada ? `
+        <form class="tarjeta-form" data-pedido-id="${info.pedido_id}" style="margin-top:15px;">
+          <input type="text" placeholder="Nombre del titular" required style="width:100%; margin-bottom:8px; padding:8px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text);"/>
+          <input type="text" placeholder="Número de tarjeta (16 dígitos)" pattern="\\d{16}" required style="width:100%; margin-bottom:8px; padding:8px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text);"/>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+             <input type="text" placeholder="MM/YY" pattern="\\d{2}/\\d{2}" required style="flex:1; padding:8px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text);"/>
+             <input type="text" placeholder="CVV" pattern="\\d{3,4}" required style="flex:1; padding:8px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text);"/>
+          </div>
+          <button type="submit" class="primary-btn" style="width:100%;">
+            Confirmar pago
+          </button>
+        </form>
+      ` : ''}
+      ${info.requiere_confirmacion_simple ? `
+        <button type="button" class="primary-btn simple-submit" data-pedido-id="${info.pedido_id}" data-metodo="${info.metodo}" style="width:100%; margin-top:10px;">
+          Confirmar pago realizado
+        </button>
+      ` : ''}
       ${info.requiere_voucher ? `
-        <form class="voucher-form" data-pedido-id="${info.pedido_id}">
+        <form class="voucher-form" data-pedido-id="${info.pedido_id}" style="margin-top:10px;">
           <label class="voucher-label">
             <span class="voucher-icon">📎</span>
-            <span>Sube tu voucher de pago (imagen)</span>
+            <span>Sube tu voucher (imagen)</span>
             <input type="file" name="voucher" accept="image/*" required />
           </label>
-          <div class="voucher-preview" style="display:none;">
-            <img alt="preview" /><span class="voucher-filename"></span>
+          <div class="voucher-preview" style="display:none; margin-top:10px;">
+            <img alt="preview" style="max-width:50px;" /><span class="voucher-filename"></span>
           </div>
-          <button type="submit" class="primary-btn voucher-submit">
+          <button type="submit" class="primary-btn voucher-submit" style="width:100%; margin-top:10px;">
             Confirmar pago
           </button>
         </form>
@@ -731,14 +787,15 @@ function renderPagoCard(info) {
     </div>
   `;
 
-  // Insertar el card en el chat
-  chatLog.appendChild(card);
-  chatLog.scrollTop = chatLog.scrollHeight;
+  bindPaymentHandlers(container, info);
+}
 
+function bindPaymentHandlers(card, info) {
   const niubizButton = card.querySelector('.niubiz-submit');
   if (niubizButton) {
     niubizButton.addEventListener('click', () => iniciarPagoNiubiz(info, niubizButton));
   }
+
 
   // Conectar el form de voucher
   const form = card.querySelector('.voucher-form');
@@ -772,13 +829,11 @@ function renderPagoCard(info) {
       try {
         const res = await authFetch('/api/voucher', { method: 'POST', body: fd });
         const data = await res.json();
-        // Mensaje del agente Finanzas verificando
-        appendChatMessage('agent finanzas', 'FINANZAS · VERIFICACIÓN',
-                          data.mensaje);
+        
         if (data.exito) {
           showToast('¡Pago verificado!', 'ok');
-          form.remove();
-          fetchProducts(); fetchCart();
+          document.getElementById('checkout-modal').classList.remove('open');
+          fetchProducts(); fetchCart(); fetchOrders(currentOrdersFilter);
         } else {
           showToast(data.mensaje, 'err');
           form.querySelector('button').disabled = false;
@@ -788,6 +843,104 @@ function renderPagoCard(info) {
         showToast('Error al subir voucher', 'err');
         form.querySelector('button').disabled = false;
         form.querySelector('button').textContent = 'Confirmar pago';
+      }
+    });
+  }
+
+  // Manejador para tarjeta simulada
+  const formTarjeta = card.querySelector('.tarjeta-form');
+  if (formTarjeta) {
+    formTarjeta.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = formTarjeta.querySelector('button');
+      btn.disabled = true;
+      btn.textContent = 'Procesando...';
+      try {
+        const res = await authFetch('/api/pago/simular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedido_id: info.pedido_id, metodo: 'tarjeta' })
+        });
+        const data = await res.json();
+        
+        if (data.exito) {
+          showToast('¡Pago con tarjeta exitoso!', 'ok');
+          document.getElementById('checkout-modal').classList.remove('open');
+          fetchProducts(); fetchCart(); fetchOrders(currentOrdersFilter);
+        } else {
+          showToast(data.mensaje, 'err');
+          btn.disabled = false;
+          btn.textContent = 'Reintentar';
+        }
+      } catch (err) {
+        showToast('Error procesando pago', 'err');
+        btn.disabled = false;
+        btn.textContent = 'Confirmar pago';
+      }
+    });
+  }
+
+  // Manejador para Niubiz simulado
+  const btnNiubizSim = card.querySelector('.niubiz-sim-submit');
+  if (btnNiubizSim) {
+    btnNiubizSim.addEventListener('click', async () => {
+      btnNiubizSim.disabled = true;
+      btnNiubizSim.textContent = 'Abriendo pasarela...';
+      setTimeout(async () => {
+        btnNiubizSim.textContent = 'Procesando...';
+        try {
+          const res = await authFetch('/api/pago/simular', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedido_id: info.pedido_id, metodo: 'niubiz' })
+          });
+          const data = await res.json();
+          
+          if (data.exito) {
+            showToast('¡Pago en pasarela exitoso!', 'ok');
+            document.getElementById('checkout-modal').classList.remove('open');
+            fetchProducts(); fetchCart(); fetchOrders(currentOrdersFilter);
+          } else {
+            showToast(data.mensaje, 'err');
+            btnNiubizSim.disabled = false;
+            btnNiubizSim.textContent = 'Reintentar';
+          }
+        } catch (err) {
+          showToast('Error procesando pago', 'err');
+          btnNiubizSim.disabled = false;
+          btnNiubizSim.textContent = 'Abrir Niubiz (Simulado)';
+        }
+      }, 1500);
+    });
+  }
+
+  // Manejador para pago simple (Yape/Plin sin voucher)
+  const btnSimple = card.querySelector('.simple-submit');
+  if (btnSimple) {
+    btnSimple.addEventListener('click', async () => {
+      btnSimple.disabled = true;
+      btnSimple.textContent = 'Verificando...';
+      try {
+        const res = await authFetch('/api/pago/simular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedido_id: info.pedido_id, metodo: info.metodo })
+        });
+        const data = await res.json();
+        
+        if (data.exito) {
+          showToast('¡Pago verificado exitosamente!', 'ok');
+          document.getElementById('checkout-modal').classList.remove('open');
+          fetchProducts(); fetchCart(); fetchOrders(currentOrdersFilter);
+        } else {
+          showToast(data.mensaje, 'err');
+          btnSimple.disabled = false;
+          btnSimple.textContent = 'Reintentar';
+        }
+      } catch (err) {
+        showToast('Error procesando pago', 'err');
+        btnSimple.disabled = false;
+        btnSimple.textContent = 'Confirmar pago realizado';
       }
     });
   }
@@ -893,3 +1046,97 @@ if(btnProfile) {
     if (created) created.textContent = user.metadata && user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleString() : 'Desconocido';
   });
 }
+
+// ===== PEDIDOS =====
+async function fetchOrders(filter10Days = false) {
+  const container = document.getElementById('orders-container');
+  if (!container) return;
+  
+  const title = document.getElementById('orders-title');
+  const subtitle = document.getElementById('orders-subtitle');
+  if (title) title.textContent = filter10Days ? 'Historial (Últimos 10 días)' : 'Mis Pedidos';
+  if (subtitle) subtitle.textContent = filter10Days ? 'Revisa el historial de tus compras recientes.' : 'Revisa el historial de tus compras y el estado de cada pedido.';
+
+  container.innerHTML = '<div class="loading" style="grid-column: 1 / -1; text-align: center; color: var(--text-dim);">Cargando pedidos...</div>';
+  
+  try {
+    const res = await authFetch('/api/pedidos');
+    const data = await res.json();
+    
+    if (!res.ok || !data.exito) {
+      throw new Error(data.mensaje || 'Error cargando historial de pedidos.');
+    }
+    
+    let orders = data.pedidos || [];
+    
+    if (filter10Days) {
+      const tenDaysAgo = new Date();
+      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+      orders = orders.filter(o => {
+        const dateObj = new Date(o.fecha);
+        return !isNaN(dateObj) && dateObj >= tenDaysAgo;
+      });
+    }
+    
+    if (orders.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; background: var(--bg-input); border-radius: var(--r-md); border: 1px solid var(--border);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="1.5" width="48" style="margin-bottom: 16px;"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          <h3 style="color: #fff; margin-bottom: 8px;">${filter10Days ? 'No hay compras recientes' : 'Aún no tienes pedidos'}</h3>
+          <p style="color: var(--text-dim); font-size: 14px;">${filter10Days ? 'No hay compras en los últimos 10 días.' : 'Tus compras confirmadas aparecerán aquí.'}</p>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = orders.map(o => {
+      const dateObj = new Date(o.fecha);
+      const dateStr = isNaN(dateObj) ? o.fecha : dateObj.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+      const statusClass = (o.estado || '').toLowerCase().replace(' ', '-');
+      const itemsHtml = (o.items || []).map(i => {
+        const nombre = typeof i === 'string' ? i : (i.producto_id || i.nombre || 'Producto');
+        const cant = typeof i === 'object' && i.cantidad ? i.cantidad : 1;
+        return `<div class="order-item"><span>${cant}x ${nombre}</span></div>`;
+      }).join('');
+      
+      const methodDisplay = o.metodo_pago ? o.metodo_pago.replace('_', ' ') : 'N/A';
+      
+      return `
+        <div class="order-card">
+          <div class="order-header">
+            <div>
+              <div class="order-id">${o.pedido_id}</div>
+              <div class="order-date">${dateStr}</div>
+            </div>
+            <div class="order-status ${statusClass}">${(o.estado || '').replace('_', ' ')}</div>
+          </div>
+          <div class="order-items">
+            ${itemsHtml || '<em style="color: var(--text-dim); font-size: 12px;">Sin detalles de productos</em>'}
+          </div>
+          <div class="order-total">
+            <span class="order-method">${methodDisplay}</span>
+            <span>S/ ${parseFloat(o.total || 0).toFixed(2)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+  } catch (err) {
+    container.innerHTML = `<div style="grid-column: 1 / -1; color: #ff5252; text-align: center;">Error: ${err.message}</div>`;
+  }
+}
+
+// Escuchar cambios de vista para refrescar pedidos
+let currentOrdersFilter = false;
+
+document.querySelectorAll('.menu-item[data-view="orders"]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    // Si el botón presionado es "Historial"
+    if (btn.id === 'btn-historial') {
+      currentOrdersFilter = true;
+    } else {
+      currentOrdersFilter = false;
+    }
+    fetchOrders(currentOrdersFilter);
+  });
+});

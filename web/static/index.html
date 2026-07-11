@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AURA Boutique — Asistente de moda con agentes MCP</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=7" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap">
   <script>
     (function () {
@@ -35,23 +35,24 @@
     </div>
 
     <nav class="menu">
-      <button class="menu-item active" data-view="chat">
+      <button class="menu-item" data-view="chat">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         Chat
       </button>
-      <button class="menu-item" data-view="catalog">
+      <button class="menu-item active" data-view="catalog">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
         Catálogo
       </button>
-      <button class="menu-item" onclick="showToast('Próximamente disponible', 'ok')">
+      <button class="menu-item" id="btn-mis-pedidos" data-view="orders">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
         Mis pedidos
       </button>
       <button class="menu-item" id="open-cart">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-        Carrito <span id="cart-count-side" class="badge">0</span>
+        Carrito
       </button>
-      <button class="menu-item" onclick="showToast('Próximamente disponible', 'ok')">
+
+      <button class="menu-item" id="btn-historial" data-view="orders">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         Historial
       </button>
@@ -109,7 +110,7 @@
 
     <div class="views-container">
       <!-- ===== CHAT VIEW ===== -->
-      <section id="view-chat" class="view active assistant">
+      <section id="view-chat" class="view assistant">
         <!-- Pestañas obligatorias para JS -->
         <div class="tabs" style="display:none;">
           <button class="tab active" data-tab="chat">Asistente</button>
@@ -155,7 +156,17 @@
         <div id="tab-events" class="tab-pane hidden"><div id="events-log"></div></div>
       </section>
 
-      
+      <!-- ===== ORDERS VIEW ===== -->
+      <section id="view-orders" class="view orders-view" style="display:none; padding: 2rem;">
+        <div class="orders-header" style="margin-bottom: 2rem;">
+          <h2 id="orders-title" style="font-family: 'Playfair Display', serif; font-size: 2rem;">Tus Pedidos</h2>
+          <p id="orders-subtitle" style="color: var(--text-dim); margin-top: 0.5rem;">Revisa el historial de tus compras y el estado de cada pedido.</p>
+        </div>
+        <div id="orders-container" class="orders-grid" style="display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
+           <div class="loading" style="grid-column: 1 / -1;">Cargando tus pedidos...</div>
+        </div>
+      </section>
+
       <!-- ===== PROFILE VIEW ===== -->
       <section id="view-profile" class="view profile-view">
         <div class="profile-header">
@@ -177,7 +188,7 @@
       </section>
 
       <!-- ===== CATALOG VIEW ===== -->
-      <section id="view-catalog" class="view catalog">
+      <section id="view-catalog" class="view active catalog">
         <div class="filters">
           <button data-cat="" class="filter active">Todos</button>
           <button data-cat="polos" class="filter">Polos</button>
@@ -201,10 +212,7 @@
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Carrito</h3>
       <button id="close-cart" class="ghost-btn">✕</button>
     </div>
-    <div class="drawer-subhead">
-      <span id="cart-count-title">0 productos</span>
-      <span id="cart-total-mini" class="cart-total-mini">S/ 0.00</span>
-    </div>
+
     <div id="cart-items" class="cart-items"></div>
     <div class="drawer-foot">
       <div class="summary-row">
@@ -217,7 +225,6 @@
          <span>Total</span><strong id="cart-total">S/ 0.00</strong>
       </div>
       <button id="checkout-btn" class="primary-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Proceder al pago</button>
-      <button class="secondary-btn">Ver carrito completo</button>
       <div class="secure-checkout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Compra segura y protegida</div>
     </div>
   </div>
@@ -225,15 +232,21 @@
   <!-- ====== CHECKOUT MODAL ====== -->
   <div id="checkout-modal" class="modal">
     <div class="modal-content">
-      <h3>Procesar pago</h3>
-      <p>Selecciona un método de pago para confirmar tu compra.</p>
-      <div class="pay-methods">
-        <button data-method="niubiz">Tarjeta Niubiz</button>
-        <button data-method="yape">Yape</button>
-        <button data-method="paypal">PayPal</button>
-        <button data-method="contra_entrega">Contra entrega</button>
+      <div id="checkout-step-1">
+        <h3>Procesar pago</h3>
+        <p>Selecciona un método de pago para confirmar tu compra.</p>
+        <div class="pay-methods">
+          <button data-method="tarjeta">Tarjeta (Crédito/Débito)</button>
+          <button data-method="niubiz">Niubiz</button>
+          <button data-method="yape">Yape</button>
+        </div>
+        <button id="close-checkout" class="ghost-btn">Cancelar</button>
       </div>
-      <button id="close-checkout" class="ghost-btn">Cancelar</button>
+      <div id="checkout-step-2" style="display: none;">
+        <h3 id="payment-title">Completar pago</h3>
+        <div id="payment-container" style="margin: 15px 0;"></div>
+        <button id="back-checkout" class="ghost-btn">Volver a métodos</button>
+      </div>
     </div>
   </div>
 
@@ -312,6 +325,6 @@
       }
     });
   </script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=1004"></script>
 </body>
 </html>
