@@ -40,6 +40,7 @@ class NotionConfig:
     db_base_conocimiento: Optional[str] = None
     db_vouchers: Optional[str] = None
     db_transacciones_niubiz: Optional[str] = None
+    db_clientes: Optional[str] = None
 
     @property
     def habilitado(self) -> bool:
@@ -57,6 +58,7 @@ class NotionConfig:
             "base_conocimiento":   bool(self.db_base_conocimiento),
             "vouchers":            bool(self.db_vouchers),
             "transacciones_niubiz": bool(self.db_transacciones_niubiz),
+            "clientes":            bool(self.db_clientes),
         }
 
 
@@ -106,6 +108,7 @@ class Settings:
                 db_base_conocimiento=_get_env("NOTION_BASE_CONOCIMIENTO_DB_ID") or None,
                 db_vouchers=_get_env("NOTION_VOUCHERS_DB_ID") or None,
                 db_transacciones_niubiz=_get_env("NOTION_TRANSACCIONES_NIUBIZ_DB_ID") or None,
+                db_clientes=_get_env("NOTION_CLIENTES_DB_ID") or None,
             ),
             niubiz=NiubizConfig(
                 username=os.getenv("NIUBIZ_USERNAME") or None,

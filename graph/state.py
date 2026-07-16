@@ -50,6 +50,7 @@ class AgentState(TypedDict):
     selected_product: str | None           # Producto en foco (ej: P001), reemplaza a producto_en_foco
     cart: dict[str, Any]                   # Resumen del carrito actual
     current_order: str | None              # ID del pedido en proceso, reemplaza a ultimo_pedido_id
+    perfil_cliente: dict[str, Any] | None  # Perfil comercial desde Notion
     
     # ----------------------------------------------------------------------
     # Herramientas y Errores

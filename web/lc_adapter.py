@@ -56,14 +56,29 @@ class _LCAdapter:
     """Wrapper que expone la misma interfaz que Orquestador.atender()
     pero por debajo usa el grafo LangGraph."""
 
-    _graph: Any = field(default=None, init=False)
-    _ready: bool = field(default=False, init=False)
+    def __init__(self):
+        self._graph = None
+        self._ready = False
 
     async def init(self) -> None:
         """Llama esto una vez en el startup de FastAPI."""
-        from graph.builder import build_graph
-        self._graph = build_graph()
-        self._ready = True
+        if not self._ready:
+            from graph.builder import build_graph
+            import aiosqlite
+            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+            
+            self._conn = await aiosqlite.connect("memoria_agente.sqlite", check_same_thread=False)
+            self._checkpointer = AsyncSqliteSaver(self._conn)
+            await self._checkpointer.setup()
+            
+            self._graph = build_graph(checkpointer=self._checkpointer)
+            self._ready = True
+
+    async def close(self) -> None:
+        """Cierra la conexión al checkpointer."""
+        if hasattr(self, '_conn') and self._conn:
+            await self._conn.close()
+            self._conn = None
 
     async def atender(self, mensaje: str,
                       usuario_id: str = "anonimo") -> AgentResponse:
@@ -107,31 +122,31 @@ class _LCAdapter:
         )
 
     async def get_history(self, usuario_id: str) -> list[dict[str, Any]]:
-        if not self._ready:
-            return []
-            
-        config = {"configurable": {"thread_id": usuario_id}}
-        state_snapshot = self._graph.get_state(config)
-        
-        if not state_snapshot or not state_snapshot.values:
-            return []
-            
-        messages = state_snapshot.values.get("messages", [])
-        
+        messages = await self.get_raw_history(usuario_id)
         out = []
         for m in messages:
             rol = "usuario" if isinstance(m, HumanMessage) else "agente"
-            if rol == "agente" and not m.content: 
-                # Omitir Tool calls vacios que Llama devuelve
+            if rol == "agente" and not getattr(m, "content", ""): 
                 continue
                 
             out.append({
                 "rol": rol,
-                "mensaje": m.content,
-                "timestamp": datetime.now().isoformat() # Aprox
+                "mensaje": getattr(m, "content", ""),
+                "timestamp": datetime.now().isoformat()
             })
-            
         return out
+
+    async def get_raw_history(self, usuario_id: str) -> list[Any]:
+        if not self._ready:
+            return []
+            
+        config = {"configurable": {"thread_id": usuario_id}}
+        state_snapshot = await self._graph.aget_state(config)
+        
+        if not state_snapshot or not state_snapshot.values:
+            return []
+            
+        return state_snapshot.values.get("messages", [])
 
 # Instancia global — importar desde api.py
 LC_ADAPTER = _LCAdapter()

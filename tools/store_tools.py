@@ -10,7 +10,7 @@ por el protocolo MCP, garantizando que el comportamiento no se altere.
 """
 
 from langchain_core.tools import tool
-from services import TIENDA
+from server.store_logic import TIENDA
 from server.models import Producto, Carrito, Pedido, ResultadoOperacion
 
 

@@ -19,3 +19,7 @@ web/uploads/
 
 # Tests cache
 .pytest_cache/
+
+# Temporales y SQLite
+memoria_agente.sqlite*
+out.txt

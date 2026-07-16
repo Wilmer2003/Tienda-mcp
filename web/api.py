@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from server.config import SETTINGS
 from agents.event_bus import BUS, Evento
 from web.lc_adapter import LC_ADAPTER
+from agents.profiler_agent import PROFILER
 from server.notion_client import NOTION
 from server.niubiz_client import NIUBIZ, NiubizApiError
 from server.store_logic import TIENDA
@@ -195,6 +196,8 @@ class SimularPagoReq(BaseModel):
 async def lifespan(app):
     await LC_ADAPTER.init()
     yield
+    if hasattr(LC_ADAPTER, 'close'):
+        await LC_ADAPTER.close()
 
 app = FastAPI(title="Tienda Virtual con LangGraph", version="1.0.0", lifespan=lifespan)
 
@@ -565,7 +568,7 @@ async def niubiz_autorizar(request: Request, pedido_id: str,
             registro["pedido_confirmado"] = pago.exito
             if pago.exito:
                 BUS.publish(EventType.PAGO_APROBADO, publicado_por="niubiz",
-                            datos={"pedido_id": pedido_id, "metodo": "niubiz"})
+                            datos={"pedido_id": pedido_id, "metodo": "niubiz", "usuario_id": usuario_id})
             else:
                 registro["store_error"] = pago.mensaje
         else:

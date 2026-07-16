@@ -722,6 +722,131 @@ class NotionClient:
             logger.error(f"[notion] cargar_sesion_desde_notion: {e}")
             return None
 
+    def cargar_perfil_cliente(self, usuario_id: str) -> Optional[dict[str, Any]]:
+        """Carga el perfil inteligente del cliente desde la BD CLIENTES (Fase 2)."""
+        if not self.disponible:
+            return None
+        cfg = SETTINGS.notion
+        if not cfg.db_clientes:
+            return None
+        self._evento(EventType.NOTION_CONSULTA_INICIADA,
+                     "cargar_perfil_cliente", db="clientes", usuario=usuario_id)
+        try:
+            schema = self._obtener_esquema(cfg.db_clientes)
+            title_prop = next(
+                (name for name, val in schema.items() if val.get("type") == "title"),
+                "usuario_id",
+            )
+            
+            resp = self._query(
+                cfg.db_clientes,
+                filter={"property": title_prop, "title": {"equals": usuario_id}},
+                page_size=1
+            )
+            results = resp.get("results", []) if resp else []
+            if not results:
+                self._evento(EventType.NOTION_CONSULTA_EXITOSA,
+                             "cargar_perfil_cliente", db="clientes", items=0)
+                return None
+                
+            props = results[0].get("properties", {})
+            
+            # Extraemos propiedades tolerando el nombre real
+            preferencias = _texto(_get_prop(props, "preferencias", "marcas_favoritas", "categorias_preferidas"))
+            tallas = _texto(_get_prop(props, "tallas_habituales", "tallas habituales", "talla", "tallas"))
+            fidelizacion = _texto(_get_prop(props, "fidelizacion", "fidelidad", "nivel"))
+            resumen = _texto(_get_prop(props, "resumen_evolutivo", "resumen evolutivo", "resumen", "comportamiento"))
+            
+            perfil = {
+                "preferencias": preferencias,
+                "tallas_habituales": tallas,
+                "fidelizacion": fidelizacion,
+                "resumen_evolutivo": resumen
+            }
+            
+            self._evento(EventType.NOTION_CONSULTA_EXITOSA,
+                         "cargar_perfil_cliente", db="clientes", items=1)
+            return perfil
+        except Exception as e:
+            self.ultimo_error = str(e)
+            self._evento(EventType.NOTION_CONSULTA_FALLIDA,
+                         "cargar_perfil_cliente", db="clientes", error=str(e))
+            return None
+
+    def actualizar_perfil_cliente(self, usuario_id: str, actualizaciones: dict) -> bool:
+        """Actualiza parcialmente el perfil del cliente en la BD CLIENTES (Fase 3)."""
+        if not self.disponible:
+            return False
+        cfg = SETTINGS.notion
+        if not cfg.db_clientes:
+            return False
+            
+        self._evento(EventType.NOTION_CONSULTA_INICIADA,
+                     "actualizar_perfil_cliente", db="clientes", usuario=usuario_id)
+        try:
+            schema = self._obtener_esquema(cfg.db_clientes)
+            title_prop = next(
+                (name for name, val in schema.items() if val.get("type") == "title"),
+                "usuario_id",
+            )
+            
+            resp = self._query(
+                cfg.db_clientes,
+                filter={"property": title_prop, "title": {"equals": usuario_id}},
+                page_size=1
+            )
+            results = resp.get("results", []) if resp else []
+            
+            def get_col(nombres_posibles):
+                for name in schema.keys():
+                    if name.lower().strip() in nombres_posibles:
+                        return name
+                return None
+                
+            props: dict[str, dict] = {}
+            
+            if "preferencias" in actualizaciones:
+                col = get_col(["preferencias", "marcas_favoritas", "categorias_preferidas", "categorias"])
+                if col:
+                    vals = actualizaciones["preferencias"]
+                    if isinstance(vals, str):
+                        vals = [v.strip() for v in vals.split(",") if v.strip()]
+                    props[col] = {"multi_select": [{"name": v[:100]} for v in vals if v]}
+                    
+            if "tallas_habituales" in actualizaciones:
+                col = get_col(["tallas_habituales", "tallas habituales", "talla", "tallas"])
+                if col:
+                    vals = actualizaciones["tallas_habituales"]
+                    if isinstance(vals, str):
+                        vals = [v.strip() for v in vals.split(",") if v.strip()]
+                    props[col] = {"multi_select": [{"name": v[:100]} for v in vals if v]}
+                    
+            if "resumen_evolutivo" in actualizaciones:
+                col = get_col(["resumen_evolutivo", "resumen evolutivo", "resumen", "comportamiento"])
+                if col:
+                    texto = str(actualizaciones["resumen_evolutivo"])[:1900]
+                    props[col] = {"rich_text": [{"text": {"content": texto}}]}
+            
+            if not props:
+                return True
+                
+            if results:
+                page_id = results[0]["id"]
+                self._client.pages.update(page_id=page_id, properties=props)
+            else:
+                props[title_prop] = {"title": [{"text": {"content": usuario_id}}]}
+                self._client.pages.create(parent={"database_id": cfg.db_clientes}, properties=props)
+                
+            self._evento(EventType.NOTION_CONSULTA_EXITOSA,
+                         "actualizar_perfil_cliente", db="clientes")
+            return True
+        except Exception as e:
+            self.ultimo_error = str(e)
+            self._evento(EventType.NOTION_CONSULTA_FALLIDA,
+                         "actualizar_perfil_cliente", db="clientes", error=str(e))
+            logger.error(f"[notion] actualizar_perfil_cliente error: {e}")
+            return False
+
     def guardar_sesion(self, usuario_id: str, contexto: dict) -> bool:
         """Espeja o registra el contexto de sesion del usuario en Notion."""
         ultimo_intent = contexto.get("ultimo_intent", "") if contexto else ""

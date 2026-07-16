@@ -10,11 +10,11 @@ import itertools
 
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 
-from agents.event_bus import EventBus
-from agents.mcp_client import MCPClient
-from agents.orchestrator import Orquestador
-from agents.shared_state import SharedState
+load_dotenv()
+
+from web.lc_adapter import LC_ADAPTER
 from server.store_data import CATALOGO, INVENTARIO_INICIAL
 import server.store_logic as store_logic
 
@@ -36,7 +36,5 @@ def _reset_tienda() -> None:
 @pytest_asyncio.fixture
 async def orquestador():
     _reset_tienda()
-    state = SharedState()
-    bus = EventBus()
-    mcp_client = MCPClient(etiqueta="test")
-    yield Orquestador(mcp_client, state, bus)
+    await LC_ADAPTER.init()
+    yield LC_ADAPTER

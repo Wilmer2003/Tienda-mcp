@@ -61,9 +61,21 @@ def filter_chat_history(messages, limit=10):
     return filtered[-limit:] if len(filtered) > limit else filtered
 
 async def supervisor_node(state: AgentState) -> dict:
+    from server.notion_client import NOTION
+    
+    perfil = state.get("perfil_cliente")
+    if perfil is None and NOTION.disponible:
+        perfil = NOTION.cargar_perfil_cliente(state["user_id"])
+        if perfil is None:
+            perfil = {}  # Evitar consultas repetidas si no existe
+            
+    system_prompt = supervisor_prompt.SYSTEM_PROMPT
+    if perfil and perfil.get("resumen_evolutivo"):
+        system_prompt += f"\n\nContexto Evolutivo del Cliente:\n{perfil['resumen_evolutivo']}"
+
     llm = _get_llm()
     mensajes_recientes = filter_chat_history(state["messages"], limit=6)
-    messages = [SystemMessage(content=supervisor_prompt.SYSTEM_PROMPT)] + mensajes_recientes
+    messages = [SystemMessage(content=system_prompt)] + mensajes_recientes
     response = await llm.ainvoke(messages)
     text = str(response.content).strip().lower()
     
@@ -84,7 +96,7 @@ async def supervisor_node(state: AgentState) -> dict:
         # Tomar el ÚLTIMO agente mencionado por el LLM (suele ser su conclusión final)
         next_action = encontrados[-1]
         
-    return {"next_action": next_action}
+    return {"next_action": next_action, "perfil_cliente": perfil}
 
 
 def make_agent_node(agent_name: str, system_prompt: str, tools: list):
@@ -99,6 +111,18 @@ def make_agent_node(agent_name: str, system_prompt: str, tools: list):
     
     async def node(state: AgentState, config: RunnableConfig) -> dict:
         prompt_dinamico = system_prompt
+        
+        perfil = state.get("perfil_cliente")
+        if perfil and any(perfil.values()):
+            prompt_dinamico += "\n\n--- PERFIL COMERCIAL DEL CLIENTE ---"
+            if perfil.get("resumen_evolutivo"):
+                prompt_dinamico += f"\nResumen: {perfil['resumen_evolutivo']}"
+            if perfil.get("preferencias"):
+                prompt_dinamico += f"\nPreferencias: {perfil['preferencias']}"
+            if perfil.get("tallas_habituales"):
+                prompt_dinamico += f"\nTallas Habituales: {perfil['tallas_habituales']}"
+            if perfil.get("fidelizacion"):
+                prompt_dinamico += f"\nNivel de Fidelización: {perfil['fidelizacion']}"
         
         # Truncar historial a los últimos 10 mensajes para evitar Rate Limits y crashes por mensajes huérfanos
         mensajes_recientes = filter_chat_history(state["messages"], limit=10)
