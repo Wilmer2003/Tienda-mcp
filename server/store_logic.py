@@ -36,7 +36,7 @@ class StoreState:
         
         # Persistencia del contador de pedidos
         self._contador_file = ".contador_pedidos"
-        start_count = 1
+        start_count = 18
         import os
         if os.path.exists(self._contador_file):
             try:
@@ -189,11 +189,9 @@ class StoreState:
                                  f"Otro pedido pudo haberlo tomado."),
                         datos={"producto_id": it.producto_id})
             pedidos_creados = []
-            import time
-            ts_part = str(int(time.time()))[-4:]
             for it in items:
                 count = next(self._contador_pedidos)
-                pedido_id = f"ORD-{ts_part}{count:02d}"
+                pedido_id = f"ORD-{count:04d}"
                 ped = Pedido(pedido_id=pedido_id, usuario_id=usuario_id,
                                 items=[it], total=it.subtotal,
                                 estado=EstadoPedido.PENDIENTE_PAGO)
