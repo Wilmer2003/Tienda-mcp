@@ -44,7 +44,7 @@ from prompts import (
 def _get_llm(temperature: float = 0.2) -> ChatGroq:
     """Retorna la instancia del LLM estandar."""
     return ChatGroq(
-        model="mixtral-8x7b-32768",
+        model="llama3-70b-8192",
         temperature=temperature,
     )
 
@@ -75,7 +75,7 @@ async def supervisor_node(state: AgentState) -> dict:
         system_prompt += f"\n\nContexto Evolutivo del Cliente:\n{perfil['resumen_evolutivo']}"
 
     llm = _get_llm()
-    mensajes_recientes = filter_chat_history(state["messages"], limit=6)
+    mensajes_recientes = filter_chat_history(state["messages"], limit=4)
     messages = [SystemMessage(content=system_prompt)] + mensajes_recientes
     response = await llm.ainvoke(messages)
     text = str(response.content).strip().lower()
