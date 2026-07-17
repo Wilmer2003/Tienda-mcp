@@ -44,7 +44,7 @@ from prompts import (
 def _get_llm(temperature: float = 0.2) -> ChatGroq:
     """Retorna la instancia del LLM estandar."""
     return ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="mixtral-8x7b-32768",
         temperature=temperature,
     )
 
