@@ -477,6 +477,39 @@ class NotionClient:
     # ============================================================
     # ESCRITURAS (best-effort)
     # ============================================================
+    def obtener_ultimo_numero_pedido(self) -> int:
+        """Consulta la base de datos de ORDENES para encontrar el ID mas alto generado."""
+        if not self.disponible:
+            return 0
+        cfg = SETTINGS.notion
+        if not cfg.db_ordenes:
+            return 0
+        try:
+            schema = self._obtener_esquema(cfg.db_ordenes)
+            title_prop = next((name for name, val in schema.items() if val.get("type") == "title"), "pedido_id")
+            
+            resp = self._query(
+                cfg.db_ordenes,
+                sorts=[{"timestamp": "created_time", "direction": "descending"}],
+                page_size=50
+            )
+            results = resp.get("results", []) if resp else []
+            max_num = 0
+            import re
+            for row in results:
+                props = row.get("properties", {})
+                pid = _texto(_get_prop(props, title_prop))
+                if pid:
+                    match = re.search(r'ORD-(\d+)', pid.upper())
+                    if match:
+                        num = int(match.group(1))
+                        if num > max_num:
+                            max_num = num
+            return max_num
+        except Exception as e:
+            logger.error(f"[notion] obtener_ultimo_numero_pedido error: {e}")
+            return 0
+
     def crear_pedido(self, pedido_id: str, usuario_id: str, total: float,
                      estado: str, items: list[dict],
                      metodo_pago: Optional[str] = None) -> bool:

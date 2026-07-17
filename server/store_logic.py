@@ -36,7 +36,7 @@ class StoreState:
         
         # Persistencia del contador de pedidos
         self._contador_file = ".contador_pedidos"
-        start_count = 18
+        start_count = 1
         import os
         if os.path.exists(self._contador_file):
             try:
@@ -44,6 +44,16 @@ class StoreState:
                     start_count = int(f.read().strip())
             except Exception:
                 pass
+                
+        # Sincronización inteligente con Notion para evitar colisiones
+        try:
+            from server.notion_client import NOTION
+            ultimo = NOTION.obtener_ultimo_numero_pedido()
+            if ultimo >= start_count:
+                start_count = ultimo + 1
+        except Exception:
+            pass
+
         self._contador_pedidos = itertools.count(start_count)
         
         # Lock para que dos agentes en paralelo no rompan el inventario.
