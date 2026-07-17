@@ -156,7 +156,7 @@ AGENT_TOOLS = {
     "catalogo": [store_tools.buscar_productos, store_tools.obtener_producto],
     "inventario": [store_tools.verificar_inventario, store_tools.consultar_historial_inventario],
     "ventas": [store_tools.buscar_productos, store_tools.agregar_al_carrito, store_tools.eliminar_del_carrito, store_tools.ver_carrito, store_tools.vaciar_carrito, store_tools.crear_pedido],
-    "pagos": [store_tools.crear_pedido, store_tools.consultar_pedido, store_tools.consultar_transacciones_niubiz],
+    "pagos": [store_tools.crear_pedido, store_tools.procesar_pago, store_tools.consultar_pedido, store_tools.consultar_transacciones_niubiz],
     "soporte": [store_tools.consultar_pedido]
 }
 
