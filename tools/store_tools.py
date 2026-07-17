@@ -18,7 +18,7 @@ from server.models import Producto, Carrito, Pedido, ResultadoOperacion
 # CATÁLOGO
 # ----------------------------------------------------------------------
 @tool
-async def buscar_productos(query: str = "", categoria: str = "", precio_max: float = 0.0) -> list[Producto]:
+async def buscar_productos(query: str = "", categoria: str = "", precio_max: float = 0.0) -> dict:
     """Busca productos en el catálogo.
 
     Args:
@@ -27,7 +27,8 @@ async def buscar_productos(query: str = "", categoria: str = "", precio_max: flo
                    calzado, chaquetas, accesorios. Vacío = todas.
         precio_max: precio máximo en soles. 0 = sin límite.
     """
-    return TIENDA.buscar(query=query, categoria=categoria, precio_max=precio_max)
+    res = TIENDA.buscar(query=query, categoria=categoria, precio_max=precio_max)
+    return {"productos": [p.model_dump() for p in res]}
 
 
 @tool
