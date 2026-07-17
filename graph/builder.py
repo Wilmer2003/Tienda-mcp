@@ -41,10 +41,11 @@ from prompts import (
     soporte_prompt
 )
 
-def _get_llm() -> ChatGroq:
+def _get_llm(temperature: float = 0.2) -> ChatGroq:
+    """Retorna la instancia del LLM estandar."""
     return ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0.2,
+        model="llama-3.1-8b-instant",
+        temperature=temperature,
     )
 
 # -----------------------------------------------------------------------------
