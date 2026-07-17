@@ -32,27 +32,27 @@ async def buscar_productos(query: str = "", categoria: str = "", precio_max: flo
 
 
 @tool
-async def obtener_producto(producto_id: str) -> Producto | ResultadoOperacion:
+async def obtener_producto(producto_id: str) -> dict:
     """Obtiene el detalle completo de un producto por su ID (ej. 'P003')."""
     p = TIENDA.obtener_producto(producto_id)
     if p is None:
-        return ResultadoOperacion(exito=False, mensaje=f"No existe el producto {producto_id}.")
-    return p
+        return ResultadoOperacion(exito=False, mensaje=f"No existe el producto {producto_id}.").model_dump()
+    return p.model_dump()
 
 
 @tool
-async def verificar_inventario(producto_id: str) -> ResultadoOperacion:
+async def verificar_inventario(producto_id: str) -> dict:
     """Verifica cuántas unidades hay disponibles de un producto."""
     p = TIENDA.obtener_producto(producto_id)
     if p is None:
-        return ResultadoOperacion(exito=False, mensaje=f"No existe el producto {producto_id}.")
+        return ResultadoOperacion(exito=False, mensaje=f"No existe el producto {producto_id}.").model_dump()
     stock = TIENDA.stock(producto_id)
     return ResultadoOperacion(
         exito=True,
         mensaje=f"'{p.nombre}' tiene {stock} unidad(es) disponible(s).",
         datos={"producto_id": p.id, "stock": stock,
                "categoria": p.categoria.value, "agotado": stock == 0},
-    )
+    ).model_dump()
 
 
 from langchain_core.runnables import RunnableConfig
@@ -71,24 +71,24 @@ async def agregar_al_carrito(producto_id: str, cantidad: int = 1, config: Runnab
 
 
 @tool
-async def eliminar_del_carrito(producto_id: str, cantidad: int | None = None, config: RunnableConfig = None) -> ResultadoOperacion:
+async def eliminar_del_carrito(producto_id: str, cantidad: int | None = None, config: RunnableConfig = None) -> dict:
     """Elimina un producto del carrito o reduce su cantidad. Si cantidad es None, elimina todo el producto."""
     usuario_id = config.get("configurable", {}).get("thread_id", "anonimo") if config else "anonimo"
-    return TIENDA.eliminar_del_carrito(usuario_id, producto_id, cantidad)
+    return TIENDA.eliminar_del_carrito(usuario_id, producto_id, cantidad).model_dump()
 
 
 @tool
-async def ver_carrito(config: RunnableConfig = None) -> Carrito:
+async def ver_carrito(config: RunnableConfig = None) -> dict:
     """Muestra el contenido y total del carrito del usuario actual."""
     usuario_id = config.get("configurable", {}).get("thread_id", "anonimo") if config else "anonimo"
-    return TIENDA.ver_carrito(usuario_id)
+    return TIENDA.ver_carrito(usuario_id).model_dump()
 
 
 @tool
-async def vaciar_carrito(config: RunnableConfig = None) -> ResultadoOperacion:
+async def vaciar_carrito(config: RunnableConfig = None) -> dict:
     """Vacía por completo el carrito del usuario actual."""
     usuario_id = config.get("configurable", {}).get("thread_id", "anonimo") if config else "anonimo"
-    return TIENDA.vaciar_carrito(usuario_id)
+    return TIENDA.vaciar_carrito(usuario_id).model_dump()
 
 
 # ----------------------------------------------------------------------
@@ -103,37 +103,37 @@ async def crear_pedido(config: RunnableConfig = None) -> dict:
 
 
 @tool
-async def procesar_pago(pedido_id: str, metodo_pago: str) -> ResultadoOperacion:
+async def procesar_pago(pedido_id: str, metodo_pago: str) -> dict:
     """Procesa el pago de un pedido y descuenta el inventario."""
-    return TIENDA.procesar_pago(pedido_id, metodo_pago)
+    return TIENDA.procesar_pago(pedido_id, metodo_pago).model_dump()
 
 
 @tool
-async def consultar_pedido(pedido_id: str) -> Pedido | ResultadoOperacion:
+async def consultar_pedido(pedido_id: str) -> dict:
     """Consulta el estado actual de un pedido por su ID."""
     p = TIENDA.consultar_pedido(pedido_id)
     if p is None:
-        return ResultadoOperacion(exito=False, mensaje=f"No existe el pedido {pedido_id}.")
-    return p
+        return ResultadoOperacion(exito=False, mensaje=f"No existe el pedido {pedido_id}.").model_dump()
+    return p.model_dump()
 
 
 @tool
-async def consultar_transacciones_niubiz(pedido_id: str = "", limite: int = 50) -> ResultadoOperacion:
+async def consultar_transacciones_niubiz(pedido_id: str = "", limite: int = 50) -> dict:
     """Consulta transacciones Niubiz registradas localmente."""
     txs = TIENDA.transacciones_niubiz(pedido_id=pedido_id or None, limite=limite)
     return ResultadoOperacion(
         exito=True,
         mensaje=f"{len(txs)} transaccion(es) Niubiz encontradas.",
         datos={"transacciones": txs, "total": len(txs)},
-    )
+    ).model_dump()
 
 
 @tool
-async def consultar_historial_inventario(producto_id: str = "", limite: int = 50) -> ResultadoOperacion:
+async def consultar_historial_inventario(producto_id: str = "", limite: int = 50) -> dict:
     """Devuelve el historial de movimientos de inventario."""
     mov = TIENDA.historial_movimientos(producto_id=producto_id or None, limite=limite)
     return ResultadoOperacion(
         exito=True,
         mensaje=f"{len(mov)} movimiento(s) registrado(s).",
         datos={"movimientos": mov, "total": len(mov)},
-    )
+    ).model_dump()

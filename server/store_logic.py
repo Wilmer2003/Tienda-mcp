@@ -189,10 +189,11 @@ class StoreState:
                                  f"Otro pedido pudo haberlo tomado."),
                         datos={"producto_id": it.producto_id})
             pedidos_creados = []
-            count = 1
+            import time
+            ts_part = str(int(time.time()))[-4:]
             for it in items:
                 count = next(self._contador_pedidos)
-                pedido_id = f"ORD-{count:04d}"
+                pedido_id = f"ORD-{ts_part}{count:02d}"
                 ped = Pedido(pedido_id=pedido_id, usuario_id=usuario_id,
                                 items=[it], total=it.subtotal,
                                 estado=EstadoPedido.PENDIENTE_PAGO)
